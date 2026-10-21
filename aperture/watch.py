@@ -38,10 +38,29 @@ from typing import Protocol, Sequence
 from PIL import Image
 
 from .decider import Decider
+from .notify import Notifier
 from .patterns import Policy, RegionGate, Verdict
 from .questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND
 from .redact import hold_placeholder, redact
 from .scanner import ocr_available, scan
+
+
+def _verdict_lines(result, secrets: list[str], covered: float | None) -> list[str]:
+    """What the notification says. Numbers first -- they are the point.
+
+    Deliberately shows the confidence, not just the conclusion. A user who can see
+    "credential 0.90" learns to trust a 0.9 and question a 0.55, which is the whole
+    reason for using a calibrated model instead of a classifier.
+    """
+    lines: list[str] = []
+    for finding in result.findings[:3]:
+        where = "whole screen" if finding.tile.index < 0 else f"region {finding.tile.index}"
+        lines.append(f"{finding.rule.name} {finding.value:.2f} - {where}")
+    for kind in dict.fromkeys(secrets):
+        lines.append(f"{kind} found by pattern match")
+    if covered is not None:
+        lines.append(f"{covered:.0%} of the frame blacked out")
+    return lines or ["nothing sensitive found"]
 
 POLL_SECONDS = 0.4
 
@@ -194,9 +213,11 @@ def guard_clipboard(
     rows: int = 2,
     mode: str = "block",
     use_ocr: bool = True,
+    notify: bool = True,
 ) -> int:
     """Watch the clipboard until Ctrl+C, or until `minutes` have passed."""
     clipboard = get_clipboard()
+    notifier = Notifier(enabled=notify)
     decider = Decider(decider_url)
     info = decider.require_vision()
     gate = RegionGate(
@@ -257,6 +278,9 @@ def guard_clipboard(
                     hold_placeholder(image.size, "checking this image, one moment")
                 )
                 stamped("held -- paste is blocked while we look")
+                # Say so on screen immediately. The gate takes about a minute on a CPU,
+                # and an unexplained minute of paste not working reads as a broken tool.
+                notifier.hold(image.size)
             except Exception as exc:  # noqa: BLE001
                 stamped(f"WARNING could not hold the clipboard: {exc}")
 
@@ -281,8 +305,9 @@ def guard_clipboard(
             for finding in result.findings:
                 stamped(f"decider {finding}")
 
-            # 5. Put back whatever is safe.
+            # 5. Put back whatever is safe, and say what happened.
             boxes = list(hints) + result.boxes()
+            found = [s for s in tally.secrets[-len(hints):]] if hints else []
             if result.verdict is Verdict.WITHHOLD or result.verdict is Verdict.UNREADABLE:
                 tally.withheld += 1
                 replacement = hold_placeholder(
@@ -290,22 +315,49 @@ def guard_clipboard(
                     "withheld: " + (result.reasons[0] if result.reasons else "unsafe"),
                 )
                 clipboard.set_image(replacement)
+                ignore.add(_fingerprint(replacement))
                 stamped(f"WITHHELD  {chr(44).join(result.reasons)}")
+                notifier.verdict(
+                    kind="withhold",
+                    title="Screenshot withheld",
+                    lines=_verdict_lines(result, found, 1.0)
+                    + ["Your clipboard does NOT contain the original."],
+                    seconds=10,
+                )
             elif boxes:
                 tally.redacted += 1
                 redaction = redact(image, boxes, mode=mode)  # type: ignore[arg-type]
                 clipboard.set_image(redaction.image)
                 ignore.add(_fingerprint(redaction.image))
-                stamped(f"REDACTED  {redaction.count} region(s), {redaction.fraction_of(image):.0%} of the frame")
+                covered = redaction.fraction_of(image)
+                stamped(f"REDACTED  {redaction.count} region(s), {covered:.0%} of the frame")
+                notifier.verdict(
+                    kind="redact",
+                    title=f"Redacted {redaction.count} region"
+                          f"{'s' if redaction.count != 1 else ''}",
+                    lines=_verdict_lines(result, found, covered)
+                    + ["Safe copy is on your clipboard."],
+                    seconds=9,
+                )
             else:
                 tally.passed += 1
                 clipboard.set_image(image)
                 stamped("PASSED    nothing found")
+                notifier.verdict(
+                    kind="pass",
+                    title="Nothing sensitive found",
+                    lines=[f"{image.width}x{image.height} checked locally",
+                           "Original is back on your clipboard."],
+                    seconds=4,
+                )
 
             stamped(f"{result.decider_calls} local decisions, {result.decider_ms:.0f} ms | {tally.line()}")
             print()
     except KeyboardInterrupt:
         pass
+    finally:
+        # Never leave a "checking..." panel on screen after the guard has stopped.
+        notifier.dismiss()
 
     print()
     print("=" * 72)
@@ -379,6 +431,7 @@ def guard_folders(
     mode: str = "block",
     use_ocr: bool = True,
     replace: bool = False,
+    notify: bool = True,
 ) -> int:
     """Watch screenshot folders and redact new captures that are not safe to share.
 
@@ -412,6 +465,7 @@ def guard_folders(
     ocr_on = use_ocr and ocr_available()
     deadline = time.time() + minutes * 60 if minutes else None
     tally = Tally()
+    notifier = Notifier(enabled=notify)
 
     # Everything already present is ignored. The guard reacts to new captures; it does
     # not go rummaging through your existing pictures.
@@ -510,8 +564,18 @@ def guard_folders(
                         seen.add(out)
 
                     verb = "WITHHELD" if result.verdict is Verdict.WITHHOLD else "REDACTED"
+                    covered = redaction.fraction_of(image)
                     stamped(f"{verb}  {redaction.count} region(s), "
-                            f"{redaction.fraction_of(image):.0%} of the frame -> {target}")
+                            f"{covered:.0%} of the frame -> {target}")
+                    notifier.verdict(
+                        kind="withhold" if verb == "WITHHELD" else "redact",
+                        title=f"{path.name}: {verb.lower()}",
+                        lines=_verdict_lines(result, [], covered)
+                        + ([f"Original overwritten in place."] if replace
+                           else [f"Safe copy written: {target}",
+                                 "The original is UNCHANGED."]),
+                        seconds=11,
+                    )
                     if not replace:
                         stamped(f"NOTE the original {path.name} is UNCHANGED; "
                                 f"attach {target} instead, or use --replace")

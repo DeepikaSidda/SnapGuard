@@ -160,6 +160,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
             mode=args.mode,
             use_ocr=args.ocr,
             replace=args.replace,
+            notify=args.notify,
         )
     return guard_clipboard(
         decider_url=args.decider_url,
@@ -168,6 +169,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
         rows=args.rows,
         mode=args.mode,
         use_ocr=args.ocr,
+        notify=args.notify,
     )
 
 
@@ -257,7 +259,9 @@ def build_parser() -> argparse.ArgumentParser:
     guard.add_argument("--replace", action="store_true",
                        help="with --folders, overwrite the original instead of writing "
                             "a .safe.png copy beside it")
-    guard.set_defaults(func=cmd_guard, ocr=True)
+    guard.add_argument("--no-notify", dest="notify", action="store_false",
+                       help="do not show the on-screen panel; console log only")
+    guard.set_defaults(func=cmd_guard, ocr=True, notify=True)
 
     doctor = sub.add_parser("doctor", help="check the moving parts")
     doctor.set_defaults(func=cmd_doctor)
