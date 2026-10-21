@@ -293,9 +293,38 @@ Aperture has a second, dumber lane: OCR plus regex.
 | **Code** | things with a known shape — `AKIA[0-9A-Z]{16}`, `sk_live_`, JWTs, DSNs | instant |
 | **Decider 2B** | things with no shape — "this is a private conversation", "this is a payroll page" | seconds |
 
-So, plainly: **for finding an AWS key, a regex beats a 2B vision model.** It's faster,
-exact, and it returns coordinates. If I'd built the whole thing on the model and called
-finding `AKIA...` an achievement, the first sharp reviewer would have said so.
+I built that fast lane because I was certain of something: **for finding an AWS key, a
+regex has to beat a 2B vision model.** `AKIA` plus sixteen uppercase characters is a fixed,
+documented format. Pattern matching is exact, instant, and returns coordinates. Asking a
+model with no image training to do it seemed like showing off.
+
+Then I pointed the finished thing at my own screen, twice, with real access keys on it.
+
+```
+regex + OCR          found nothing          (4.8 s)
+Strands Decider 2B   credential = 0.884     -> redacted 28% of the frame
+```
+
+And earlier, on a different capture of mine:
+
+```
+regex + OCR          found nothing
+Strands Decider 2B   credential = 0.900, 0.568  -> redacted 56% of the frame
+```
+
+**Twice, the 2B model caught my real credentials and the hand-written code didn't.**
+
+I still don't know exactly why. Either the OCR is mangling characters at that font size,
+or my keys sit in a format none of my thirteen patterns cover. Either way the lesson is
+the same, and it isn't the one I set out to write: the deterministic lane is a useful
+accelerator when it fires, and it is not a safety net. The model is the safety net.
+
+I've left the fast lane in, because when it *does* fire it gives exact pixel coordinates
+in under a second and cuts the gate from six local decisions to three. But I had the roles
+backwards. Code is the optimisation. Decider is the thing that actually catches it.
+
+That was the most useful hour of this build — being wrong about my own architecture, on my
+own data, with numbers to prove it.
 
 The model earns its place on the judgements no regex can make. That's the honest split,
 and it's the one that makes the fast path fast enough for the clipboard guard to hold your

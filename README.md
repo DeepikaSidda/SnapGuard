@@ -285,9 +285,27 @@ from.
 | **Code** (OCR + regex) | things with a known shape — `AKIA[0-9A-Z]{16}`, `sk_live_`, JWTs, DSNs | instant |
 | **Decider 2B** | things with no shape — "this is a private conversation", "this is someone's payroll page" | seconds |
 
-Said plainly: **for finding an AWS key, a regex beats a 2B vision model.** It's faster,
-exact, and returns coordinates. The model earns its place on the judgements no regex can
-make. Pretending otherwise would be the easiest way to lose credibility.
+The fast lane was built on an assumption that turned out to be wrong, and the measurement
+is worth recording.
+
+**Expected:** a regex beats a 2B vision model at finding `AKIA[0-9A-Z]{16}` — exact,
+instant, returns coordinates.
+
+**Measured, on two real screenshots with live access keys on screen:**
+
+| | Capture 1 (1221×347) | Capture 2 (822×175) |
+|---|---|---|
+| regex + OCR | found nothing | found nothing |
+| **Strands Decider 2B** | **credential 0.884** | **credential 0.900 / 0.568** |
+| outcome | redacted 28% of frame | redacted 56% of frame |
+
+Twice, the model caught real credentials that the hand-written patterns missed. Cause not
+yet established — either the OCR mangles characters at that size, or those keys aren't in
+the 13 patterns.
+
+The fast lane stays, because when it fires it localises to exact pixels in under a second
+and cuts the gate from 6 local decisions to 3. But the roles were backwards: **code is the
+optimisation, Decider is the safety net.** Not the other way round.
 
 ---
 

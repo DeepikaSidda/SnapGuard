@@ -156,8 +156,58 @@ beating two larger ones on the screening question.
 ## What all of this implies for the design
 
 1. Whole-frame questions for context — proven at 0.96–0.99, one request.
-2. Deterministic code for structured secrets — a regex beats a 2B model at finding
-   `AKIA[0-9A-Z]{16}`, and returns coordinates.
+2. Deterministic code for structured secrets, as an accelerator rather than a safety net.
+   See section 8: the expectation that a regex would beat the model at finding
+   `AKIA[0-9A-Z]{16}` did not survive contact with two real screenshots.
 3. Coarse-to-fine tiles with "any of these?" wording, only when needed.
 4. A blank-image check before trusting any answer.
 5. The verdict composed in code, never asked of the model.
+
+---
+
+## 8. The prediction that failed: regex did not beat the model
+
+Everything above was measured on screens we drew ourselves. This section was measured on
+two **real** screenshots taken by the author on their own machine, with live cloud access
+keys visible. The images are not in this repository and were never saved; only the
+verdicts below were recorded.
+
+The design assumed a clear division of labour:
+
+> Code finds things with a known shape — `AKIA[0-9A-Z]{16}`, `sk_live_`, JWTs, DSNs.
+> Decider answers the judgements that have no shape.
+
+An AWS access key id is about as fixed a format as exists, so the deterministic lane
+should have won it outright: exact, instant, and it returns pixel coordinates.
+
+It didn't.
+
+| | Capture 1, 1221x347 | Capture 2, 822x175 |
+|---|---|---|
+| OCR + 13 regex patterns | **nothing found** (4.8 s) | **nothing found** (4.9 s) |
+| Strands Decider 2B | **credential 0.884** on region 0 | **credential 0.900** region 0, **0.568** region 1 |
+| Result | redacted 28% of the frame | redacted 56% of the frame |
+| Local decisions / wall | 4 / 49 s | 6 / 63 s |
+
+Twice, on real data, the 2B decision model caught credentials the hand-written patterns
+missed entirely.
+
+**Cause: not yet established.** Two candidates, and we have not separated them:
+
+1. `rapidocr-onnxruntime` is misreading characters at that font size, so the text the
+   regexes see is not the text on screen.
+2. The keys are in a format none of the 13 patterns cover.
+
+Diagnosing it properly means inspecting what the OCR actually read, which can be done
+without handling the secret itself by reporting character classes and token lengths rather
+than content. That work is not done.
+
+**What we changed as a result.** Nothing in the code -- the fast lane stays, because when
+it *does* fire it localises to exact pixels in under a second and cut one run from 6 local
+decisions to 3. What changed is the claim. The roles were stated backwards in the first
+draft of every document here:
+
+> code is the **optimisation**, Decider is the **safety net**
+
+not the other way round. A deterministic lane you cannot measure is an assumption, and
+this one was wrong on the first real data it met.

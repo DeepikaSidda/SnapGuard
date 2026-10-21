@@ -275,9 +275,12 @@ Change the rubric, not the gate. Define your own `Rule` list:
   so those strings carry much of the signal. Write them as carefully as the question.
 - **`hint_boxes`** lets a cheaper exact detector go first. We run OCR plus regex for
   secrets with known formats (`AKIA[0-9A-Z]{16}` and friends), and regions overlapping a
-  hint skip the coarse screen. Honestly: for structured secrets a regex beats a 2B model
-  outright — it is faster, exact, and returns coordinates. Use the model for the
-  judgements regexes cannot make.
+  hint skip the coarse screen, which cut one real run from 6 local decisions to 3.
+
+  Worth knowing before you rely on it: we expected the regex lane to beat the model at
+  finding structured secrets, and on two real screenshots with live keys on screen it
+  found **nothing** while Decider scored 0.884 and 0.900. Treat a deterministic lane as an
+  accelerator that localises precisely *when it fires*, not as the thing you depend on.
 
 Other uses the same shape fits: deciding which frames of a session recording are worth a
 multimodal call; gating camera frames before they leave a device; choosing which pages of
