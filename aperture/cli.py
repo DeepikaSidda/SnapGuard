@@ -265,7 +265,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _force_utf8_output() -> None:
+    """Stop a stray character in the model's reply from killing the process.
+
+    Windows consoles default to cp1252. Nova emitted a non-breaking hyphen (U+2011) in
+    one run and `print` raised UnicodeEncodeError, so the agent's entire answer was lost
+    and the command exited 1. A generative model will eventually produce an em dash, a
+    curly quote or an emoji; none of those should be fatal to a CLI.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_output()
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
