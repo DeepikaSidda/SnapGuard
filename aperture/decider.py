@@ -8,10 +8,17 @@ Two endpoints are supported, because the two that exist in the wild disagree:
   local   POST /v1/systemone   the server from `strands-decider serve`
   hosted  POST /v1/decide      the AWS User Group Madurai community API, Bearer auth
 
-The local server is the default and the one everything here was measured on. The hosted
-one is offered so a reader can try the pattern without a 4.5 GB download, but note its
-free tier caps you at 4 questions and 1 image per request -- which defeats the point of
-asking many questions about one image.
+The local server is the default and the one everything here was measured on.
+
+The hosted path is offered so a reader can try the pattern without a 4.5 GB download, but
+two caveats. **It is untested**: it is written against the documented request shape and
+was never exercised against the live service, because the only key available during
+development had to be treated as compromised. And its free tier caps you at 4 questions
+and 1 image per request, which defeats the point of asking many questions about one
+image -- Aperture's own rubric exceeds both limits.
+
+Use the local server. The hosted switch is a convenience for reading, not a supported
+path.
 """
 
 from __future__ import annotations
