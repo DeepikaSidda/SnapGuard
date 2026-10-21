@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aperture-gate"
+version = "0.1.0"
+description = "A local gate that decides how much of your screen may reach a cloud model. Strands Decider 2B scores screen regions on your own machine; only the clean, relevant ones reach Amazon Bedrock."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+keywords = ["strands", "decider", "bedrock", "agents", "privacy", "vision"]
+dependencies = [
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# The agent half: a Strands agent on Amazon Bedrock.
+agent = ["strands-agents>=1.60", "boto3>=1.40"]
+# The deterministic fast lane. rapidocr needs no system binary, which matters for
+# a pattern other people are meant to drop into their own projects.
+ocr = ["rapidocr-onnxruntime>=1.3"]
+# Clipboard and screenshot-folder watching on Windows.
+windows = ["pywin32>=306"]
+# Untested; see README. NSPasteboard access on macOS.
+macos = ["pyobjc-framework-Cocoa>=10.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+aperture = "aperture.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["aperture*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Virtualenv -- the model weights alone are 4.5 GB
+.venv/
+venv/
+
+# Logs from installs and spikes
+*.log
+
+# Generated eval screens. They are reproducible:
+#   python evalset/screens.py && python evalset/hard_screens.py
+# Kept out of git so nobody mistakes a drawn screenshot for a real one.
+evalset/out/
+
+# Benchmark output is committed on purpose -- it is evidence. Uncomment to exclude.
+# evalset/results.json
+
+# Never commit a real screenshot or capture to this repository.
+*.capture.png
+captures/

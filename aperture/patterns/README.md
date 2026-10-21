@@ -1,0 +1,247 @@
+# RegionGate — a reusable Decider 2B pattern for images
+
+**Pattern: `#context-memory`** — score which pieces of visual context are relevant, and
+permitted, before injecting them into a model's context.
+
+Two files, no dependency on the rest of this project:
+
+| File | What it is |
+|---|---|
+| `region_gate.py` | The decision. Scores the regions of an image against a written rubric and composes a verdict. |
+| `intervention.py` | The wiring. Puts that decision in a Strands agent's path as an `InterventionHandler`. |
+
+Copy them both, or `pip install aperture-gate` and import them.
+
+---
+
+## The problem it solves
+
+Your agent is about to send an image to a model. A screenshot, a scan, a camera frame, a
+rendered page. Two questions are worth asking first, and an LLM is the wrong thing to ask:
+
+- **Is all of it safe to send?** Part of a screenshot might be a credentials file.
+- **Is all of it worth sending?** Most of a 1920×1080 frame is irrelevant to the question.
+
+Both are cheap, repeated, visual judgements with a closed answer set. That is exactly what
+a decision model is for, and it runs on `127.0.0.1`, which matters when the thing you are
+deciding is whether something may leave the machine.
+
+---
+
+## Thirty-second version
+
+```python
+from aperture.decider import Decider, noul
+from aperture.patterns import RegionGate, Rule, Verdict
+
+RULES = [
+    Rule(
+        name="credential",
+        question=noul(
+            "Is an access key, password or token visible as text?",
+            true="a credential can be read in the image",
+            false="no credential is visible",
+        ),
+        any_question=noul(                      # same question, for a batch of regions
+            "Across all the regions shown, does ANY of them contain an access key, "
+            "password or token visible as text?",
+            true="at least one region shows a credential",
+            false="no region shows a credential",
+        ),
+        threshold=0.50,                          # yours, not the model's
+        on_match=Verdict.REDACT,
+    ),
+]
+
+gate = RegionGate(Decider(), rules=RULES)
+result = gate.inspect(screenshot)
+
+if result.verdict is Verdict.WITHHOLD:
+    ...                                          # send nothing
+elif result.verdict is Verdict.REDACT:
+    send(redact(screenshot, result.boxes()))     # send it with those boxes painted out
+else:
+    send(screenshot)
+```
+
+You need a vision-enabled server:
+
+```bash
+pip install "strands-decider[vision]"
+strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 \
+    --vision --device cpu --port 8099
+```
+
+---
+
+## Four things this gets right that are easy to get wrong
+
+Each one is a measurement, not an opinion. Numbers and scripts in
+[`../../research/`](../../research/README.md).
+
+### 1. It checks the image is actually there
+
+Straight from the upstream docs:
+
+> Its confidence does not tell you that an image is missing: check that the image is
+> there before you ask.
+
+Hand the model a blank or missing image and it does **not** become uncertain. It answers
+confidently, at chance. A gate that trusts those numbers is reading noise wearing a
+confident face.
+
+`looks_blank()` checks pixel variance before anything is asked, and `inspect()` calls it
+first. A blank frame costs **zero** decider calls and returns `UNREADABLE`.
+
+### 2. Batched questions must say "any of these"
+
+A request takes up to 4 images, and they are concatenated into **one** state — so a
+question is answered once over all of them, not once per image. The upstream test pins
+the layout:
+
+```python
+render_image_state("two pages", 2) == (
+    "<state>\n<|vision_start|><|image_pad|><|vision_end|>\n"
+    "<|vision_start|><|image_pad|><|vision_end|>\ntwo pages\n</state>\n")
+```
+
+Word the question accordingly:
+
+| Wording | Batch with a key | Batch all clean | Separation |
+|---|---|---|---|
+| "Is a credential visible?" | 0.451 | 0.110 | 0.341 |
+| "Does **ANY of these** contain a credential?" | **0.548** | **0.061** | **0.488** |
+
+The rewording nearly doubles separation — and the naive version leaves the positive case
+at 0.451, *below* a 0.5 threshold, where you would miss it entirely.
+
+That is what `Rule.any_question` is for, and it is what makes the coarse pass safe.
+
+### 3. Narrow questions only. Never ask for the verdict.
+
+Measured on five labelled screens:
+
+| Question style | Result |
+|---|---|
+| Narrow: "is a private conversation visible?" | 0.862 on the chat, ≤0.042 elsewhere |
+| Narrow: "are account balances visible?" | 0.817 on the bank page, ≤0.073 elsewhere |
+| Broad: "how sensitive is this screen?" (score) | everything 0.74–1.27, confidence 0.29–0.36 |
+
+The broad question caused the run's only misclassification. Recomposing the same answers
+in code: **5/5**.
+
+Note what the calibration did: confidence collapsed to ~0.3 on the badly posed question.
+**The model told us the question was bad.** That is the signal no LLM API gives you.
+
+So `RegionGate` never asks for an overall judgement. Rules return facts; `Policy` turns
+facts into a verdict in ordinary Python you can read and test.
+
+### 4. Crop before you ask about small things
+
+Images are scaled so the longest side is ≤448px. A 1920×1080 frame arrives at 448×252,
+and small text is gone:
+
+| Input | `credential_visible` |
+|---|---|
+| Full 1920×1080 frame | 0.643 — barely above chance |
+| Cropped region containing the key | **0.884** |
+| Control crop: code, no secret | **0.186** |
+
+Hence the grid. A 2×2 grid of a 1080p screen gives regions that downscale 2.1× instead of
+4.3×, and a 3×3 gets you to 1.4×.
+
+---
+
+## How `inspect()` spends its calls
+
+```
+1. blank check            0 calls      pixel variance, instant
+2. context pass           1 call       whole-frame rules, all batched together
+3. coarse pass            ceil(n/4)    4 regions at a time, "any of these?"
+4. fine pass              1 per hot    only regions a coarse batch flagged
+```
+
+A clean 2×2 screen costs **2 calls**. One with a problem costs 3–4. The alternative —
+one call per region — costs 5 and gets no better answer.
+
+Measured on an i5-1235U with no GPU: ~12s per call, so a clean screen is ~24s. On a
+4-vCPU `c7i.xlarge` the community reports ~681ms per call, and AWS report ~115ms on an
+RTX 3090. The *ratios* are what travel; the absolute numbers are a worst case.
+
+---
+
+## Putting it in a Strands agent
+
+`intervention.py` maps the four-value verdict onto Strands' typed actions. Most gates only
+use `Proceed` and `Deny`, which makes them a bouncer. The interesting one is `Transform`:
+
+| Verdict | Action | What the agent experiences |
+|---|---|---|
+| `PASS` | `Proceed` | the call runs unchanged |
+| `REDACT` | **`Transform`** | the call runs, **narrowed** to the cleared regions |
+| `WITHHOLD` | `Deny` | blocked, with the reason shown to the model |
+| `UNREADABLE` | `Guide` or `Confirm` | hands the turn back, or asks a human |
+
+`Transform` mutates the tool call in place before it executes. So an agent that asked to
+read nine regions reads the two that were clean and relevant, and never learns the other
+seven existed. Better than allowing everything, and better than blocking everything.
+
+```python
+from strands import Agent
+from strands.models import BedrockModel
+from aperture.patterns.intervention import ScreenBuffer, ScreenGate
+
+buffer = ScreenBuffer(columns=2, rows=2)
+agent = Agent(
+    model=BedrockModel(model_id="us.amazon.nova-2-lite-v1:0"),
+    tools=[make_look_at_screen(buffer), make_read_screen_region(buffer)],
+    interventions=[ScreenGate(gate, buffer, guarded_tools=["read_screen_region"])],
+)
+```
+
+Two notes from building this:
+
+**Capture and inspection share a `ScreenBuffer`.** The handler cannot pull the image out
+of a tool call, so the capture tool writes the frame into a buffer and the handler reads
+it back. Pass the same instance to both.
+
+**A `Transform`ed tool cannot tell what was removed from its own arguments.** By the time
+the tool runs, the unsafe regions are already gone from the list — ask the arguments and
+the answer is always "nothing was withheld". Read it from `result.flagged` instead. This
+cost me a debugging cycle; the agent cheerfully answered as though it had seen the whole
+screen.
+
+---
+
+## Adapting it
+
+Change the rubric, not the gate. Define your own `Rule` list:
+
+- **`threshold`** is policy, and it is yours. Bias it toward the cheaper mistake. A gate
+  protecting credentials should fire early; one filtering noise should not.
+- **`on_match`** — use `REDACT` when painting out a corner leaves something useful, and
+  `WITHHOLD` when the whole frame is the problem. A bank statement has no clean half.
+- **`true`/`false` descriptions** are not decoration. A noul renders as a two-option list,
+  so those strings carry much of the signal. Write them as carefully as the question.
+- **`hint_boxes`** lets a cheaper exact detector go first. We run OCR plus regex for
+  secrets with known formats (`AKIA[0-9A-Z]{16}` and friends), and regions overlapping a
+  hint skip the coarse screen. Honestly: for structured secrets a regex beats a 2B model
+  outright — it is faster, exact, and returns coordinates. Use the model for the
+  judgements regexes cannot make.
+
+Other uses the same shape fits: deciding which frames of a session recording are worth a
+multimodal call; gating camera frames before they leave a device; choosing which pages of
+a scanned document to pay a document model for.
+
+---
+
+## What this is not
+
+A security control. A ~0.87-accuracy model with **no image training at all** — the vision
+tower is inherited from Qwen3.5-2B-Base and frozen — is a speed bump and a second pair of
+eyes. It will miss things.
+
+Bias your thresholds toward withholding, keep the deterministic lane for anything with a
+known shape, and do not tell your users they are safe.
+
+Apache-2.0, same as this repository.

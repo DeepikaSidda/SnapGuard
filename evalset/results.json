@@ -1,0 +1,352 @@
+{
+  "generated": "2026-10-21T14:59:24",
+  "ground_truth": {
+    "ide_env": "hold",
+    "bank": "hold",
+    "dm": "hold",
+    "deploy_failure": "hold",
+    "terminal_error": "send",
+    "docs": "send",
+    "sha_soup": "send",
+    "public_metrics": "send",
+    "dark_editor": "send",
+    "token_in_url": "hold"
+  },
+  "systems": [
+    {
+      "name": "Strands Decider 2B (local, CPU)",
+      "accuracy": 1.0,
+      "median_ms": 44224.8,
+      "total_cost_usd": 0.0,
+      "missed_holds": [],
+      "false_holds": [],
+      "rows": [
+        {
+          "screen": "ide_env",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 51426.244100090116,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "redact; 4 calls; a credential or secret value is visible in part of the screen"
+        },
+        {
+          "screen": "bank",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 40119.41819963977,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "withhold; 2 calls; account balances or financial records are on screen"
+        },
+        {
+          "screen": "dm",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 40197.6272999309,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "withhold; 2 calls; a private conversation between named people is on screen"
+        },
+        {
+          "screen": "deploy_failure",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 50090.49169998616,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "redact; 3 calls; a credential or secret value is visible in part of the screen"
+        },
+        {
+          "screen": "terminal_error",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 43843.09670003131,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "pass; 2 calls; nothing fired"
+        },
+        {
+          "screen": "docs",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 40888.4199000895,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "pass; 2 calls; nothing fired"
+        },
+        {
+          "screen": "sha_soup",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 54807.790900114924,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "pass; 2 calls; nothing fired"
+        },
+        {
+          "screen": "public_metrics",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 66503.83470021188,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "pass; 2 calls; nothing fired"
+        },
+        {
+          "screen": "dark_editor",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 40166.76880000159,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "pass; 2 calls; nothing fired"
+        },
+        {
+          "screen": "token_in_url",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 44606.48690024391,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "detail": "withhold; 3 calls; account balances or financial records are on screen; a credential or secret value is visible in part of the screen"
+        }
+      ]
+    },
+    {
+      "name": "us.amazon.nova-2-lite-v1:0 (Amazon Bedrock)",
+      "accuracy": 0.9,
+      "median_ms": 1642.8,
+      "total_cost_usd": 0.00031,
+      "missed_holds": [],
+      "false_holds": [
+        "sha_soup"
+      ],
+      "rows": [
+        {
+          "screen": "ide_env",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 3170.23879988119,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: yes | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "bank",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 1625.89419959113,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: yes | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "dm",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 1652.7843000367284,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: yes | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "deploy_failure",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 1935.9377999790013,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: yes | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "terminal_error",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 1541.2663002498448,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: SEND"
+        },
+        {
+          "screen": "docs",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 1632.8923995606601,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: SEND"
+        },
+        {
+          "screen": "sha_soup",
+          "truth": "send",
+          "predicted": "hold",
+          "latency_ms": 1850.643599871546,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: yes | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "public_metrics",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 2036.3517999649048,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: SEND"
+        },
+        {
+          "screen": "dark_editor",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 1544.240899849683,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: SEND"
+        },
+        {
+          "screen": "token_in_url",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 1246.4636000804603,
+          "tokens_in": 400,
+          "tokens_out": 29,
+          "cost_usd": 3.096e-05,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: yes | IDENTITY: no | VERDICT: HOLD"
+        }
+      ]
+    },
+    {
+      "name": "us.amazon.nova-pro-v1:0 (Amazon Bedrock)",
+      "accuracy": 0.8,
+      "median_ms": 1099.7,
+      "total_cost_usd": 0.007728,
+      "missed_holds": [],
+      "false_holds": [
+        "sha_soup",
+        "public_metrics"
+      ],
+      "rows": [
+        {
+          "screen": "ide_env",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 2417.806100100279,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: yes | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "bank",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 1035.6214996427298,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: yes | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "dm",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 911.7662999778986,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: yes | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "deploy_failure",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 1324.1334999911487,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: yes | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "terminal_error",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 1022.4387003108859,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: SEND"
+        },
+        {
+          "screen": "docs",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 1071.8236998654902,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: SEND"
+        },
+        {
+          "screen": "sha_soup",
+          "truth": "send",
+          "predicted": "hold",
+          "latency_ms": 1080.454799812287,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: yes | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "public_metrics",
+          "truth": "send",
+          "predicted": "hold",
+          "latency_ms": 1299.9681001529098,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: yes | IDENTITY: no | VERDICT: HOLD"
+        },
+        {
+          "screen": "dark_editor",
+          "truth": "send",
+          "predicted": "send",
+          "latency_ms": 1156.9838002324104,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: no | IDENTITY: no | VERDICT: SEND"
+        },
+        {
+          "screen": "token_in_url",
+          "truth": "hold",
+          "predicted": "hold",
+          "latency_ms": 1118.8663998618722,
+          "tokens_in": 850,
+          "tokens_out": 29,
+          "cost_usd": 0.0007728,
+          "detail": "CREDENTIAL: no | PRIVATE_CHAT: no | FINANCIAL: yes | IDENTITY: no | VERDICT: HOLD"
+        }
+      ]
+    }
+  ]
+}
