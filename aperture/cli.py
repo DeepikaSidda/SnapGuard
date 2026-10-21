@@ -53,13 +53,7 @@ def _print_result(result, image: Image.Image) -> None:
             print(f"    {finding}")
     total = len(result.cleared) + len(result.flagged)
     if total:
-        sending = len(result.injectable)
-        unsafe = len(result.flagged)
-        skipped = total - unsafe - sending
-        print(f"\n  regions: {sending} of {total} selected to send")
-        print(f"           {unsafe} withheld for safety, "
-              f"{skipped} skipped as unrelated or unreadable")
-        print(f"           {1 - sending / total:.0%} of the frame stays on this machine")
+        print(f"\n  regions: {result.selection_summary(total)}")
     print(f"\n  VERDICT: {result.verdict.value.upper()}")
     for reason in result.reasons:
         print(f"           {reason}")
@@ -156,8 +150,9 @@ def cmd_ask(args: argparse.Namespace) -> int:
 def cmd_guard(args: argparse.Namespace) -> int:
     from .watch import guard_clipboard, guard_folders
 
-    if args.folders:
+    if args.folders or args.dirs:
         return guard_folders(
+            directories=[Path(d) for d in args.dirs] if args.dirs else None,
             decider_url=args.decider_url,
             minutes=args.for_minutes,
             columns=args.columns,
@@ -256,6 +251,9 @@ def build_parser() -> argparse.ArgumentParser:
     guard.add_argument("--folders", action="store_true",
                        help="watch screenshot folders instead of the clipboard "
                             "(Win+PrtScn and Save-as write files, not clipboard images)")
+    guard.add_argument("--dir", dest="dirs", action="append", metavar="PATH",
+                       help="watch this directory instead of the platform defaults; "
+                            "repeatable. Implies --folders.")
     guard.add_argument("--replace", action="store_true",
                        help="with --folders, overwrite the original instead of writing "
                             "a .safe.png copy beside it")

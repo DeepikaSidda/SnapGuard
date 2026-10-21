@@ -149,20 +149,55 @@ class GateResult:
         the intersection is usually much smaller -- which is the point, since the
         regions that never leave are both the cheapest and the safest.
         """
+        # A whole-frame verdict overrides any per-region conclusion. A banking page is
+        # condemned by what the frame *is*, not by any one quadrant of it, so every
+        # region can look individually clean while nothing may be sent. Without this
+        # the summary cheerfully reported "4 of 4 regions selected" on a screen that
+        # was refused outright.
+        if self.verdict in (Verdict.WITHHOLD, Verdict.UNREADABLE):
+            return []
+
         safe = [t for t in self.cleared if t not in self.illegible]
         if not self.relevant:
             return safe
         keep = {t.index for t in self.relevant}
         return [t for t in safe if t.index in keep]
 
+    def accounting(self, total: int) -> dict[str, int]:
+        """Where every region went, in one place so every report agrees.
+
+        Written as a single method because two separate reporters disagreed about this
+        and both were wrong: a whole-frame refusal was being filed under "unrelated",
+        which reads as housekeeping rather than the safety decision it actually was.
+        """
+        sending = len(self.injectable)
+        if self.verdict is Verdict.WITHHOLD:
+            # The frame itself is the problem, so every region is a safety withholding
+            # regardless of how any individual one scored.
+            return {"sent": 0, "unsafe": total, "skipped": 0, "unreadable": 0}
+        if self.verdict is Verdict.UNREADABLE:
+            return {"sent": 0, "unsafe": 0, "skipped": 0, "unreadable": total}
+        unsafe = len(self.flagged)
+        unreadable = len(self.illegible)
+        return {
+            "sent": sending,
+            "unsafe": unsafe,
+            "unreadable": unreadable,
+            "skipped": max(0, total - sending - unsafe - unreadable),
+        }
+
     def selection_summary(self, total: int) -> str:
-        chosen = len(self.injectable)
-        return (
-            f"{chosen} of {total} regions selected "
-            f"({1 - chosen / total:.0%} of the frame withheld)"
-            if total
-            else "no regions"
-        )
+        if not total:
+            return "no regions"
+        a = self.accounting(total)
+        bits = [f"{a['sent']} of {total} regions sent"]
+        if a["unsafe"]:
+            bits.append(f"{a['unsafe']} withheld for safety")
+        if a["skipped"]:
+            bits.append(f"{a['skipped']} skipped as unrelated")
+        if a["unreadable"]:
+            bits.append(f"{a['unreadable']} unreadable")
+        return ", ".join(bits) + f" ({1 - a['sent'] / total:.0%} kept local)"
 
     def summary(self) -> str:
         if self.verdict is Verdict.PASS:

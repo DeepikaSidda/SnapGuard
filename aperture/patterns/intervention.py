@@ -172,10 +172,13 @@ class ScreenGate(InterventionHandler):
                 self.on_decision(result)
 
         requested = self._requested(event)
-        # Safe AND relevant AND readable. Falls back to the whole safe set when no
-        # question was supplied and relevance was therefore never scored.
+        # Safe AND relevant AND readable, and empty if the whole frame was condemned.
+        # Falls back to the full permitted set when the model asked for regions that
+        # are all excluded but others are available.
         permitted = {t.index for t in result.injectable}
-        allowed = sorted(i for i in requested if i in permitted) or sorted(permitted)
+        allowed = sorted(i for i in requested if i in permitted)
+        if not allowed and permitted:
+            allowed = sorted(permitted)
         withheld = sorted(set(requested) - set(allowed))
 
         action, verdict = self._decide(result, allowed, withheld, event)
@@ -228,7 +231,10 @@ class ScreenGate(InterventionHandler):
             )
 
         if result.verdict is Verdict.WITHHOLD:
-            # Nothing on this screen can be sent, and no crop fixes it.
+            # Nothing on this screen can be sent, and no crop fixes it. Record the
+            # denial honestly: nothing was allowed, everything requested was withheld.
+            allowed.clear()
+            withheld[:] = sorted(set(self._requested(event)))
             return (
                 Deny(
                     reason=(

@@ -31,9 +31,14 @@ AGENT_MODEL = "us.amazon.nova-2-lite-v1:0"
 
 SYSTEM_PROMPT = """You are a developer's assistant who can look at their screen.
 
-When the user describes a problem they are seeing, look at the screen straight away with
-look_at_screen, then read the regions you need with read_screen_region. Be decisive: ask
-for any region that might hold the error.
+When the user asks about anything on their screen, do this without being asked twice:
+  1. call look_at_screen
+  2. call read_screen_region for EVERY region it reports
+
+Never ask the user which region to look at. You cannot know which region matters until
+you have read it, and a local gate already decides which ones you are allowed to see --
+so always request all of them and let it narrow your request. Asking the user to choose
+wastes their time and tells you nothing.
 
 A local gate inspects screen regions before you see them. It may withhold some, narrow
 your request, or refuse entirely. Tool results will tell you when this happened, in a
@@ -68,17 +73,8 @@ class Session:
     def report(self) -> str:
         lines = [self.gate.summary(), f"decider: {self.decider}"]
         if self.buffer.result is not None:
-            r = self.buffer.result
-            total = len(self.buffer.tiles) or 1
-            sending = len(r.injectable)
-            lines.append(
-                f"regions: {sending} of {total} sent to Bedrock "
-                f"({len(r.flagged)} withheld for safety, "
-                f"{total - len(r.flagged) - sending} unrelated or unreadable)"
-            )
-            lines.append(
-                f"{1 - sending / total:.0%} of the frame never left this machine"
-            )
+            total = len(self.buffer.tiles)
+            lines.append(f"regions: {self.buffer.result.selection_summary(total)}")
         return "\n".join(lines)
 
 

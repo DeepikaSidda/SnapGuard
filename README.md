@@ -233,6 +233,7 @@ author. And a screenshot does not always go to the clipboard:
 aperture guard                      # clipboard
 aperture guard --folders            # screenshot folders, writes a .safe.png copy
 aperture guard --folders --replace  # overwrite the original in place
+aperture guard --dir D:\shots          # watch a specific folder instead
 ```
 
 The folder guard is non-destructive by default: it leaves your original alone and writes
