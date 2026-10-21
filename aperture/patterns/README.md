@@ -74,6 +74,45 @@ strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 \
 
 ---
 
+## Two axes, not one
+
+Pass `asking_about` and every region is scored for **relevance** as well as safety:
+
+```python
+result = gate.inspect(screenshot, asking_about="why is my deploy failing?")
+
+result.cleared      # safe to send
+result.relevant     # bears on the question
+result.injectable   # the intersection -- what you actually send
+```
+
+`injectable` is the `#context-memory` decision in one property: safe **and** relevant
+**and** readable. On the demo screen, safety alone withheld 1 of 4 regions; adding
+relevance withheld 2 of 4, because an empty editor pane is perfectly safe and perfectly
+useless.
+
+It costs more: relevance must be known for every region, so the coarse screen is skipped
+and each region gets its own request. Worth it when the alternative is sending four
+regions where two would do. Omit `asking_about` and you get safety-only behaviour at the
+cheaper call count.
+
+Relevance is supplied as a *factory* rather than a `Rule`, because the question has to
+quote what the user actually said and that isn't known until inspection time:
+
+```python
+gate = RegionGate(
+    decider,
+    rules=SENSITIVITY_RULES,
+    relevance=relevance_rule,   # callable: str -> Rule
+    legibility=LEGIBLE,         # asked per region, see point 1 below
+)
+```
+
+If you report this to a user, keep the two reasons apart. "We withheld part of your
+screen because it had a credential on it" is a warning they must act on. "We skipped a
+region because it wasn't relevant" is housekeeping. Conflating them trains people to
+ignore the warning.
+
 ## Four things this gets right that are easy to get wrong
 
 Each one is a measurement, not an opinion. Numbers and scripts in
@@ -90,8 +129,14 @@ Hand the model a blank or missing image and it does **not** become uncertain. It
 confidently, at chance. A gate that trusts those numbers is reading noise wearing a
 confident face.
 
-`looks_blank()` checks pixel variance before anything is asked, and `inspect()` calls it
-first. A blank frame costs **zero** decider calls and returns `UNREADABLE`.
+Two layers, because they catch different things:
+
+- **`looks_blank()`** measures pixel variance before anything is asked. Cheap, certain,
+  and it costs **zero** decider calls. A blank frame returns `UNREADABLE` immediately.
+- **the `legibility` rule** is asked per region, alongside the sensitivity questions, and
+  catches the subtler case: a region that has pixels but nothing readable in them. Regions
+  that fail it land in `result.illegible` and are excluded from `injectable`, so the gate
+  never records a confident verdict about a smear.
 
 ### 2. Batched questions must say "any of these"
 
@@ -163,6 +208,11 @@ Hence the grid. A 2×2 grid of a 1080p screen gives regions that downscale 2.1×
 
 A clean 2×2 screen costs **2 calls**. One with a problem costs 3–4. The alternative —
 one call per region — costs 5 and gets no better answer.
+
+With `asking_about`, step 3 is skipped and every region gets a fine pass, so a 2×2 screen
+costs **5 calls** — but each one carries sensitivity, relevance and legibility together.
+The marginal cost of an extra question on an image already in the request is 2.8 s against
+9.5 s for a fresh one, so bundling is most of why this is affordable at all.
 
 Measured on an i5-1235U with no GPU: ~12s per call, so a clean screen is ~24s. On a
 4-vCPU `c7i.xlarge` the community reports ~681ms per call, and AWS report ~115ms on an

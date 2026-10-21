@@ -111,6 +111,13 @@ class GateResult:
     # Regions that may be sent, and regions that may not.
     cleared: list[Tile] = field(default_factory=list)
     flagged: list[Tile] = field(default_factory=list)
+    # The second axis. Populated only when `inspect(asking_about=...)` is given: regions
+    # judged to bear on the question actually asked. Safety and usefulness are separate
+    # questions, and a region has to pass both to be worth sending.
+    relevant: list[Tile] = field(default_factory=list)
+    # Per-region scores, keyed by tile index then question name, for the record.
+    scores: dict[int, dict[str, float]] = field(default_factory=dict)
+    illegible: list[Tile] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     # Answers recorded for the record rather than to fire a rule -- a `choice` naming
     # what kind of screen this is, for instance. The generative half uses these to
@@ -132,6 +139,30 @@ class GateResult:
     def boxes(self) -> list[tuple[int, int, int, int]]:
         """Pixel boxes of the flagged regions, for a redactor to paint over."""
         return [t.box for t in self.flagged]
+
+    @property
+    def injectable(self) -> list[Tile]:
+        """The regions actually worth sending: safe AND relevant AND readable.
+
+        This is the `#context-memory` decision in one line. When no question was given,
+        relevance was never scored and every cleared region qualifies. When one was,
+        the intersection is usually much smaller -- which is the point, since the
+        regions that never leave are both the cheapest and the safest.
+        """
+        safe = [t for t in self.cleared if t not in self.illegible]
+        if not self.relevant:
+            return safe
+        keep = {t.index for t in self.relevant}
+        return [t for t in safe if t.index in keep]
+
+    def selection_summary(self, total: int) -> str:
+        chosen = len(self.injectable)
+        return (
+            f"{chosen} of {total} regions selected "
+            f"({1 - chosen / total:.0%} of the frame withheld)"
+            if total
+            else "no regions"
+        )
 
     def summary(self) -> str:
         if self.verdict is Verdict.PASS:
@@ -186,6 +217,13 @@ class RegionGate:
         context_rules: Sequence[Rule] = (),
         policy: Policy | None = None,
         info_questions: Mapping[str, dict[str, Any]] | None = None,
+        # Scored alongside the sensitivity rules when `inspect` is given a question.
+        # A factory rather than a Rule, because the question has to quote what the user
+        # actually asked, which is not known until inspection time.
+        relevance: Callable[[str], Rule] | None = None,
+        # Asked per region so a verdict is never recorded about an unreadable smear.
+        # `looks_blank` catches a solid colour cheaply; this catches the subtler case.
+        legibility: Rule | None = None,
         # 2x2 by default. The grid is a straight trade: a 3x3 grid of a 1920x1080 screen
         # preserves more detail (tiles downscale 1.4x rather than 2.1x) but costs more
         # requests, and on CPU each request is ~12 s. 2x2 lets the coarse pass screen
@@ -204,6 +242,8 @@ class RegionGate:
         self.rules = list(rules)
         self.context_rules = list(context_rules)
         self.info_questions = dict(info_questions or {})
+        self.relevance = relevance
+        self.legibility = legibility
         self.policy = policy or Policy()
         self.columns = columns
         self.rows = rows
@@ -270,16 +310,46 @@ class RegionGate:
                 result.cleared.extend(batch)
         return hot
 
-    def _fine_pass(self, tiles: Sequence[Tile], result: GateResult) -> None:
-        """One request per tile, all rules batched into it."""
-        questions = {r.name: r.question for r in self.rules}
+    def _fine_pass(
+        self,
+        tiles: Sequence[Tile],
+        result: GateResult,
+        relevance: Rule | None = None,
+    ) -> None:
+        """One request per tile, every rule batched into it.
+
+        Batching is the whole reason this is affordable: measured on an i5-1235U, the
+        first question about an image costs 9.5 s and each additional one 2.8 s. Asking
+        sensitivity, relevance and legibility together costs barely more than asking
+        about safety alone.
+        """
+        base = {r.name: r.question for r in self.rules}
+        if relevance:
+            base[relevance.name] = relevance.question
+        if self.legibility:
+            base[self.legibility.name] = self.legibility.question
+
         for tile in tiles:
             if looks_blank(tile.image):
+                # Cheap and certain, and it costs no decider call. A blank region is
+                # neither a risk nor any use, so it is cleared and marked unreadable.
                 result.cleared.append(tile)
+                result.illegible.append(tile)
                 continue
-            reply = self.decider.ask(self.state, questions, [tile.image])
+
+            reply = self.decider.ask(self.state, base, [tile.image])
             result.decider_calls += 1
             result.decider_ms += reply.latency_ms
+            result.scores[tile.index] = {
+                name: answer.value for name, answer in reply.answers.items()
+            }
+
+            if self.legibility and not self.legibility.fires(
+                reply.value(self.legibility.name)
+            ):
+                # Nothing readable here, so do not record a verdict about it. The
+                # model's confidence would not have told us this.
+                result.illegible.append(tile)
 
             fired = [r for r in self.rules if r.fires(reply.value(r.name))]
             for rule in fired:
@@ -291,6 +361,9 @@ class RegionGate:
             else:
                 result.cleared.append(tile)
 
+            if relevance and relevance.fires(reply.value(relevance.name)):
+                result.relevant.append(tile)
+
     # ---- the entry point ---------------------------------------------------
 
     def inspect(
@@ -299,6 +372,7 @@ class RegionGate:
         *,
         hint_boxes: Sequence[tuple[int, int, int, int]] = (),
         skip_coarse: bool = False,
+        asking_about: str | None = None,
     ) -> GateResult:
         """Inspect `image` and return a verdict.
 
@@ -306,8 +380,20 @@ class RegionGate:
         regions worth a close look -- an OCR-plus-regex pass, say. Tiles overlapping a
         hint skip the coarse screen and go straight to the fine pass, because we already
         have reason to believe something is there.
+
+        `asking_about` turns on the second axis. Give it the user's actual question and
+        every region is also scored for whether it bears on that question, so
+        `result.injectable` becomes the intersection of safe and useful rather than just
+        safe. This necessarily costs more: relevance is per-region, so the coarse screen
+        is skipped and every region gets a request. Worth it when the alternative is
+        sending four regions where one would do.
         """
         result = GateResult(verdict=Verdict.PASS)
+        relevance = (
+            self.relevance(asking_about)
+            if (self.relevance and asking_about)
+            else None
+        )
 
         # 1. Is there anything to look at? The model will not tell us, so we check.
         if looks_blank(image):
@@ -329,13 +415,15 @@ class RegionGate:
         rest = [t for t in tiles if t not in hinted]
 
         to_examine = list(hinted)
-        if skip_coarse:
+        if skip_coarse or relevance is not None:
+            # Relevance has to be known for every region, not just the suspicious ones,
+            # so the coarse screen cannot help us here.
             to_examine.extend(rest)
         else:
             for batch in self._coarse_pass(rest, result):
                 to_examine.extend(batch)
 
-        self._fine_pass(to_examine, result)
+        self._fine_pass(to_examine, result, relevance=relevance)
 
         result.verdict = self.policy.decide(result.findings)
         return result

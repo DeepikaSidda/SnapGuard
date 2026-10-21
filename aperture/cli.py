@@ -53,9 +53,13 @@ def _print_result(result, image: Image.Image) -> None:
             print(f"    {finding}")
     total = len(result.cleared) + len(result.flagged)
     if total:
-        withheld_fraction = len(result.flagged) / total
-        print(f"\n  regions: {len(result.cleared)} cleared, "
-              f"{len(result.flagged)} withheld ({withheld_fraction:.0%})")
+        sending = len(result.injectable)
+        unsafe = len(result.flagged)
+        skipped = total - unsafe - sending
+        print(f"\n  regions: {sending} of {total} selected to send")
+        print(f"           {unsafe} withheld for safety, "
+              f"{skipped} skipped as unrelated or unreadable")
+        print(f"           {1 - sending / total:.0%} of the frame stays on this machine")
     print(f"\n  VERDICT: {result.verdict.value.upper()}")
     for reason in result.reasons:
         print(f"           {reason}")
@@ -150,8 +154,18 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
 
 def cmd_guard(args: argparse.Namespace) -> int:
-    from .watch import guard_clipboard
+    from .watch import guard_clipboard, guard_folders
 
+    if args.folders:
+        return guard_folders(
+            decider_url=args.decider_url,
+            minutes=args.for_minutes,
+            columns=args.columns,
+            rows=args.rows,
+            mode=args.mode,
+            use_ocr=args.ocr,
+            replace=args.replace,
+        )
     return guard_clipboard(
         decider_url=args.decider_url,
         minutes=args.for_minutes,
@@ -234,11 +248,17 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--model", default=None)
     ask.set_defaults(func=cmd_ask)
 
-    guard = sub.add_parser("guard", help="watch the clipboard for screenshots")
+    guard = sub.add_parser("guard", help="watch the clipboard, or screenshot folders")
     guard.add_argument("--for", dest="for_minutes", type=int, default=0,
                        help="stop after N minutes (0 = until Ctrl+C)")
     guard.add_argument("--mode", choices=["block", "blur"], default="block")
     guard.add_argument("--no-ocr", dest="ocr", action="store_false")
+    guard.add_argument("--folders", action="store_true",
+                       help="watch screenshot folders instead of the clipboard "
+                            "(Win+PrtScn and Save-as write files, not clipboard images)")
+    guard.add_argument("--replace", action="store_true",
+                       help="with --folders, overwrite the original instead of writing "
+                            "a .safe.png copy beside it")
     guard.set_defaults(func=cmd_guard, ocr=True)
 
     doctor = sub.add_parser("doctor", help="check the moving parts")

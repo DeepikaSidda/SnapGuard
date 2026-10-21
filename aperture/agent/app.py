@@ -17,7 +17,13 @@ from strands.models import BedrockModel
 from ..decider import Decider
 from ..patterns import Policy, RegionGate
 from ..patterns.intervention import ScreenBuffer, ScreenGate
-from ..questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND
+from ..questions import (
+    CONTEXT_RULES,
+    LEGIBLE,
+    REGION_RULES,
+    SCREEN_KIND,
+    relevance_rule,
+)
 
 # Drives the loop and writes the answer. Nova 2 Lite reads images, calls tools, and was
 # the most accurate Nova on our eval screens.
@@ -64,10 +70,14 @@ class Session:
         if self.buffer.result is not None:
             r = self.buffer.result
             total = len(self.buffer.tiles) or 1
-            withheld = len(r.flagged)
+            sending = len(r.injectable)
             lines.append(
-                f"regions: {len(r.cleared)} cleared, {withheld} withheld "
-                f"({withheld / total:.0%} of the frame never left this machine)"
+                f"regions: {sending} of {total} sent to Bedrock "
+                f"({len(r.flagged)} withheld for safety, "
+                f"{total - len(r.flagged) - sending} unrelated or unreadable)"
+            )
+            lines.append(
+                f"{1 - sending / total:.0%} of the frame never left this machine"
             )
         return "\n".join(lines)
 
@@ -93,6 +103,11 @@ def build(
         rules=REGION_RULES,
         context_rules=CONTEXT_RULES,
         info_questions=SCREEN_KIND,
+        # Both axes of the context-and-memory decision. Safety alone tells you what you
+        # *may* send; relevance tells you what is worth sending, and the intersection is
+        # what actually reaches Bedrock.
+        relevance=relevance_rule,
+        legibility=LEGIBLE,
         policy=Policy(fail_closed=True),
         columns=columns,
         rows=rows,

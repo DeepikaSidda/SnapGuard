@@ -26,6 +26,15 @@ that said "don't post this in chats."
 A Strands agent that can look at your screen to help you, with **Strands Decider 2B**
 sitting in its path deciding what it may look at.
 
+Every region of the screen is scored on **two independent axes**:
+
+- **Is it safe to send?** — credentials, private conversations, financial records, faces
+- **Is it worth sending?** — does this region bear on what the user actually asked
+
+Only regions that are *both* reach Bedrock. That intersection is the `#context-memory`
+decision, and it is why most of a screen usually stays put even when nothing on it is
+sensitive.
+
 ```
 you ──► agent (Amazon Bedrock) ──► "let me look at your screen"
                                         │
@@ -69,24 +78,30 @@ $ aperture ask "my deploy is failing, what's wrong?" --screen evalset/out/deploy
   financial_records   : 0.065
   findings:
     credential=0.824 on tile 1 (r0c1, 1018x572) -> redact
-  regions: 3 cleared, 1 withheld (25%)
   VERDICT: REDACT
-  cost   : 6 local decisions, 69731 ms, $0.00
+  cost   : 5 local decisions, 75162 ms, $0.00
 
   WHAT THE AGENT SAID
   The deployment is failing due to a database connection timeout...
   PoolTimeout: could not acquire a connection within 5.0s (pool size 5, in use 5)
 
-  ### Important Note About Withheld Content
-  **Region 1 was withheld** because it contained a credential or secret value.
-  1. Rotate the credentials immediately
-  2. Run check_gitignore on any files that might contain these credentials
+  **What was withheld:**
+  Region 1 (top-right) was withheld because it contained a credential or secret
+  value. You should rotate this credential immediately.
 
-  narrowed  requested [0, 1, 2, 3] -> allowed [0, 2, 3], withheld [1]
+  narrowed  requested [0, 1, 2, 3] -> allowed [0, 2], withheld [1, 3]
 ```
 
-The agent asked for all four regions. The gate gave it three. It still solved the
-problem, and it told the user what it couldn't see and what to do about it.
+The agent asked for all four regions and got two. It still solved the problem, and told
+the user what it couldn't see and what to do about it.
+
+Note the two kinds of withholding in that last line, because they are different
+decisions. **Region 1** was held for *safety* — the credentials pane. **Region 3** was
+skipped as *irrelevant* — empty editor space that had nothing to do with a deploy error.
+The agent was told about the first and deliberately not warned about the second.
+
+Half the screen never left the machine, and only one half of that was for safety
+reasons. The rest was simply not worth sending.
 
 ## Measured against Amazon Nova
 
@@ -203,11 +218,40 @@ real person's data is in this repository; every key shown is a documented exampl
 
 ---
 
-## The clipboard guard
+## The guard: two channels, because you use both
 
 The agent path only protects images going through the agent. It does nothing about you
 pasting a screenshot into a browser tab yourself — which is the case that actually bit the
-author. So `aperture guard` watches the clipboard:
+author. And a screenshot does not always go to the clipboard:
+
+| How you took it | Where it lands | Covered by |
+|---|---|---|
+| `Win+Shift+S`, `PrtScn` | the clipboard | `aperture guard` |
+| `Win+PrtScn`, Snipping Tool "Save as" | a PNG in `Pictures\Screenshots` | `aperture guard --folders` |
+
+```bash
+aperture guard                      # clipboard
+aperture guard --folders            # screenshot folders, writes a .safe.png copy
+aperture guard --folders --replace  # overwrite the original in place
+```
+
+The folder guard is non-destructive by default: it leaves your original alone and writes
+`name.safe.png` beside it, because silently overwriting someone's files is a worse failure
+than leaving them a choice. `--replace` closes the hole properly if you want that.
+
+It also ignores everything already on disk when it starts, and only reacts to files
+created from then on. It does not go rummaging through your existing pictures.
+
+Verified live on the author's machine:
+
+```
+[16:27:21] new file aperture-test-capture.png, 1920x1080
+[16:27:27] regex  aws_access_key_id (AKIA...(20 chars)) at (1025, 172, 1374, 200)
+[16:28:29] decider credential=0.824 on tile 1 (r0c1, 1018x572) -> redact
+[16:28:30] REDACTED  2 region(s), 29% of the frame -> aperture-test-capture.safe.png
+```
+
+### The clipboard path, step by step
 
 1. an image appears
 2. **it is taken away immediately** and replaced with a placeholder

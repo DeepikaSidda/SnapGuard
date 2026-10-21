@@ -161,14 +161,21 @@ class ScreenGate(InterventionHandler):
         # and re-running a 12-second gate on identical pixels is waste.
         result = self.buffer.result
         if result is None:
-            result = self.gate.inspect(self.buffer.image)
+            result = self.gate.inspect(
+                self.buffer.image,
+                # The user's actual words, so regions can be scored for relevance as
+                # well as safety. Set by Session.__call__ before the agent runs.
+                asking_about=self.buffer.asking_about or None,
+            )
             self.buffer.result = result
             if self.on_decision:
                 self.on_decision(result)
 
         requested = self._requested(event)
-        cleared = {t.index for t in result.cleared}
-        allowed = sorted(i for i in requested if i in cleared) or sorted(cleared)
+        # Safe AND relevant AND readable. Falls back to the whole safe set when no
+        # question was supplied and relevance was therefore never scored.
+        permitted = {t.index for t in result.injectable}
+        allowed = sorted(i for i in requested if i in permitted) or sorted(permitted)
         withheld = sorted(set(requested) - set(allowed))
 
         action, verdict = self._decide(result, allowed, withheld, event)
@@ -231,6 +238,20 @@ class ScreenGate(InterventionHandler):
                     )
                 ),
                 "denied",
+            )
+
+        if not allowed:
+            # Safe, but nothing on screen bears on the question. Not a safety refusal,
+            # and it would be wrong to tell the user their screen was withheld.
+            return (
+                Guide(
+                    feedback=(
+                        "Nothing on the captured screen appears to relate to what the "
+                        "user asked. Nothing was sent. Ask them which window the "
+                        "problem is in, or to describe it in words."
+                    )
+                ),
+                "irrelevant",
             )
 
         if withheld:

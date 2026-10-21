@@ -65,29 +65,45 @@ Here is a real run. The screen is a terminal with a failing deploy on the left, 
   financial_records   : 0.065
   findings:
     credential=0.824 on tile 1 (r0c1, 1018x572) -> redact
-  regions: 3 cleared, 1 withheld (25%)
   VERDICT: REDACT
-  cost   : 6 local decisions, 69731 ms, $0.00
+  cost   : 5 local decisions, 75162 ms, $0.00
 
-  narrowed  requested [0, 1, 2, 3] -> allowed [0, 2, 3], withheld [1]
+  narrowed  requested [0, 1, 2, 3] -> allowed [0, 2], withheld [1, 3]
 ```
 
-The agent asked for all four regions. It got three. And it still answered the question:
+The agent asked for all four regions. It got two. And it still answered the question:
 
 > The deployment is failing due to a database connection timeout.
 > `PoolTimeout: could not acquire a connection within 5.0s (pool size 5, in use 5)`
 >
-> **Region 1 was withheld** because it contained a credential or secret value.
-> 1. Rotate the credentials immediately
-> 2. Run `check_gitignore` on any files that might contain these credentials
+> **What was withheld:** Region 1 (top-right) was withheld because it contained a
+> credential or secret value. You should rotate this credential immediately.
 
-Twenty-five percent of my screen never left the machine, and I still got my answer.
+Half my screen never left the machine, and I still got my answer.
+
+Look closely at which regions went, because they went for two different reasons.
+**Region 1** was held back for *safety* — the credentials pane. **Region 3** was skipped
+as *irrelevant* — empty editor space with nothing to do with a failing deploy.
+
+That distinction matters more than it looks. The agent was told about the credential and
+deliberately not told to warn me about the empty pane. Conflate the two and you train
+people to ignore the warning that counts.
 
 ## The decision I handed to Decider 2B
 
 **Pattern: `#context-memory`** — *score which pieces of context are relevant before
-injecting them.* Regions of a screenshot are the chunks. Each one gets scored on two
-independent axes, and only regions that are both **clean** and **relevant** get injected.
+injecting them.* Regions of a screenshot are the chunks. Each one is scored on two
+independent axes, and only regions that are **both** clean and relevant get injected:
+
+```python
+result.cleared      # safe to send
+result.relevant     # bears on what the user asked
+result.injectable   # the intersection -- what actually goes to Bedrock
+```
+
+On that deploy screen, safety alone withheld 1 of 4 regions. Adding relevance withheld 2
+of 4 — because an empty editor pane is perfectly safe and perfectly useless. The cheapest
+region to send is the one you work out you don't need.
 
 The questions are deliberately boring:
 

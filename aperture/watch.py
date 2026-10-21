@@ -32,7 +32,8 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import Protocol
+from pathlib import Path
+from typing import Protocol, Sequence
 
 from PIL import Image
 
@@ -312,6 +313,219 @@ def guard_clipboard(
     if tally.secrets:
         kinds = ", ".join(sorted(set(tally.secrets)))
         print(f"  structured secrets caught: {kinds}")
+    print(f"  {decider}")
+    print("=" * 72)
+    return 0
+
+
+# --------------------------------------------------------------------------- files
+#
+# The other half of the promise. A screenshot does not always go to the clipboard: on
+# Windows, Win+PrtScn writes a PNG into Pictures\Screenshots, and the Snipping Tool's
+# "Save as" writes wherever you point it. On macOS, Cmd+Shift+4 writes to the Desktop.
+# Those files then get attached to an email or dragged into a chat window, and the
+# clipboard guard never sees them.
+#
+# Watching the clipboard alone would leave that hole open, so this watches the folder
+# too. Same gate, same two lanes, different trigger.
+
+
+def default_screenshot_dirs() -> list[Path]:
+    """Where this platform puts screenshots, for the directories that exist."""
+    home = Path.home()
+    if sys.platform == "win32":
+        candidates = [
+            home / "Pictures" / "Screenshots",
+            home / "OneDrive" / "Pictures" / "Screenshots",
+            home / "Pictures" / "Screen Shots",
+        ]
+    elif sys.platform == "darwin":
+        candidates = [home / "Desktop", home / "Pictures" / "Screenshots"]
+    else:
+        candidates = [home / "Pictures", home / "Desktop"]
+    return [p for p in candidates if p.is_dir()]
+
+
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
+
+def _settled(path: Path, tries: int = 12, pause: float = 0.25) -> bool:
+    """Wait until a file stops growing.
+
+    A screenshot appears on disk before it is finished being written, and reading it
+    half-written gives a truncated image that the gate would have to guess about. Two
+    equal sizes in a row is good enough.
+    """
+    last = -1
+    for _ in range(tries):
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return False
+        if size > 0 and size == last:
+            return True
+        last = size
+        time.sleep(pause)
+    return False
+
+
+def guard_folders(
+    *,
+    directories: Sequence[Path] | None = None,
+    decider_url: str | None = None,
+    minutes: int = 0,
+    columns: int = 2,
+    rows: int = 2,
+    mode: str = "block",
+    use_ocr: bool = True,
+    replace: bool = False,
+) -> int:
+    """Watch screenshot folders and redact new captures that are not safe to share.
+
+    `replace` decides what happens to a file that needs redacting:
+
+      False (default)  the original is left alone and a `.safe.png` copy is written
+                       beside it. Non-destructive, and you choose which to attach.
+      True             the original is overwritten in place, and the unredacted
+                       version is gone. Closes the hole properly, at the cost of
+                       destroying data the user may have wanted.
+
+    The default is the cautious one, because silently overwriting somebody's files is a
+    worse failure than leaving a redacted copy next to them. The README says which.
+    """
+    watched = list(directories) if directories else default_screenshot_dirs()
+    if not watched:
+        print("no screenshot folders found to watch")
+        return 1
+
+    decider = Decider(decider_url)
+    info = decider.require_vision()
+    gate = RegionGate(
+        decider,
+        rules=REGION_RULES,
+        context_rules=CONTEXT_RULES,
+        info_questions=SCREEN_KIND,
+        policy=Policy(fail_closed=True),
+        columns=columns,
+        rows=rows,
+    )
+    ocr_on = use_ocr and ocr_available()
+    deadline = time.time() + minutes * 60 if minutes else None
+    tally = Tally()
+
+    # Everything already present is ignored. The guard reacts to new captures; it does
+    # not go rummaging through your existing pictures.
+    seen: set[Path] = set()
+    for directory in watched:
+        seen.update(
+            p for p in directory.iterdir()
+            if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
+        )
+
+    print("=" * 72)
+    print("  APERTURE ARMED (folders)")
+    print("=" * 72)
+    for directory in watched:
+        print(f"  watching  : {directory}")
+    print(f"  decider   : {info.get('checkpoint')} on {info.get('device')}")
+    print(f"  fast lane : {'OCR + regex' if ocr_on else 'off (no OCR installed)'}")
+    print(f"  on a hit  : {'overwrite the original' if replace else 'write a .safe.png copy'}")
+    print(f"  ignoring  : {len(seen)} files already present")
+    if deadline:
+        print(f"  expires   : in {minutes} minutes")
+    print()
+    print("  only files created from now on; existing pictures are never read")
+    print("  Ctrl+C to disarm")
+    print("=" * 72)
+    print()
+
+    def stamped(message: str) -> None:
+        print(f"[{time.strftime('%H:%M:%S')}] {message}")
+
+    try:
+        while deadline is None or time.time() < deadline:
+            time.sleep(POLL_SECONDS * 2)
+            for directory in watched:
+                try:
+                    entries = list(directory.iterdir())
+                except OSError:
+                    continue
+                for path in entries:
+                    if (
+                        path in seen
+                        or not path.is_file()
+                        or path.suffix.lower() not in IMAGE_SUFFIXES
+                        or path.name.endswith(".safe.png")
+                    ):
+                        continue
+                    seen.add(path)
+                    if not _settled(path):
+                        stamped(f"{path.name}: still being written, skipped")
+                        continue
+
+                    try:
+                        image = Image.open(path)
+                        image.load()
+                    except Exception as exc:  # noqa: BLE001
+                        stamped(f"{path.name}: could not be read ({exc})")
+                        continue
+
+                    tally.seen += 1
+                    stamped(f"new file {path.name}, {image.width}x{image.height}")
+
+                    hints: list[tuple[int, int, int, int]] = []
+                    if ocr_on:
+                        for secret in scan(image):
+                            stamped(f"regex  {secret.kind} "
+                                    f"({secret.redacted_sample}) at {secret.box}")
+                            tally.secrets.append(secret.kind)
+                            hints.append(secret.box)
+
+                    result = gate.inspect(image, hint_boxes=hints)
+                    for finding in result.findings:
+                        stamped(f"decider {finding}")
+
+                    boxes = list(hints) + result.boxes()
+                    if result.verdict in (Verdict.WITHHOLD, Verdict.UNREADABLE):
+                        boxes = [(0, 0, image.width, image.height)]
+                        tally.withheld += 1
+                    elif boxes:
+                        tally.redacted += 1
+                    else:
+                        tally.passed += 1
+                        stamped(f"PASSED    {path.name}, left untouched")
+                        stamped(f"{result.decider_calls} local decisions, "
+                                f"{result.decider_ms:.0f} ms | {tally.line()}")
+                        print()
+                        continue
+
+                    redaction = redact(image, boxes, mode=mode)  # type: ignore[arg-type]
+                    if replace:
+                        redaction.image.save(path)
+                        target = path.name
+                    else:
+                        target = f"{path.stem}.safe.png"
+                        out = path.with_name(target)
+                        redaction.image.save(out)
+                        seen.add(out)
+
+                    verb = "WITHHELD" if result.verdict is Verdict.WITHHOLD else "REDACTED"
+                    stamped(f"{verb}  {redaction.count} region(s), "
+                            f"{redaction.fraction_of(image):.0%} of the frame -> {target}")
+                    if not replace:
+                        stamped(f"NOTE the original {path.name} is UNCHANGED; "
+                                f"attach {target} instead, or use --replace")
+                    stamped(f"{result.decider_calls} local decisions, "
+                            f"{result.decider_ms:.0f} ms | {tally.line()}")
+                    print()
+    except KeyboardInterrupt:
+        pass
+
+    print()
+    print("=" * 72)
+    print(f"  DISARMED -- {tally.line()}")
+    if tally.secrets:
+        print(f"  structured secrets caught: {', '.join(sorted(set(tally.secrets)))}")
     print(f"  {decider}")
     print("=" * 72)
     return 0

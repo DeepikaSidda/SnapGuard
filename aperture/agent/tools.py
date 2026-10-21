@@ -110,15 +110,28 @@ def make_read_screen_region(buffer: ScreenBuffer, *, model_id: str = READER_MODE
             return "No screen captured. Call look_at_screen first."
 
         result = buffer.result
-        cleared = {t.index for t in result.cleared} if result else set()
+        permitted = {t.index for t in result.injectable} if result else set()
         wanted = [int(i) for i in regions]
-        allowed = [i for i in wanted if i in cleared]
+        allowed = [i for i in wanted if i in permitted]
 
-        # What was withheld is a property of the gate's findings, not of this call's
+        # What was held back is a property of the gate's findings, not of this call's
         # arguments. ScreenGate rewrites `regions` via Transform before we run, so by
-        # the time we get here the unsafe regions are already gone from the list -- ask
-        # the arguments and the answer is always "nothing was withheld".
-        blocked = sorted(t.index for t in result.flagged) if result else []
+        # the time we get here the excluded regions are already gone from the list --
+        # ask the arguments and the answer is always "nothing was withheld".
+        #
+        # Two kinds of exclusion, and conflating them would mislead the user. A region
+        # held for safety is a warning they need to act on; a region skipped as
+        # irrelevant is just housekeeping.
+        unsafe = sorted(t.index for t in result.flagged) if result else []
+        irrelevant = (
+            sorted(
+                t.index
+                for t in result.cleared
+                if t.index not in permitted and t not in result.illegible
+            )
+            if result
+            else []
+        )
 
         if not allowed:
             return (
@@ -156,15 +169,25 @@ def make_read_screen_region(buffer: ScreenBuffer, *, model_id: str = READER_MODE
         # Without the reason it cannot give the advice that matters -- rotate the key,
         # check whether the file is ignored by git -- and in testing it simply ignored
         # the omission and answered as though it had seen everything.
-        note = ""
-        if blocked:
+        parts: list[str] = []
+        if unsafe:
             why = ", ".join(result.reasons) if result and result.reasons else "unspecified"
+            parts.append(
+                f"regions {unsafe} were WITHHELD FOR SAFETY and never transmitted "
+                f"(reason: {why}). You MUST tell the user which part of their screen "
+                "was withheld and why. If a credential was involved, tell them to "
+                "rotate it and check whether the file holding it is ignored by git."
+            )
+        if irrelevant:
+            parts.append(
+                f"regions {irrelevant} were skipped as unrelated to the question, not "
+                "for safety. No need to warn the user about these."
+            )
+        note = ""
+        if parts:
             note = (
-                f"\n\n[APERTURE: regions {blocked} were withheld and never transmitted. "
-                f"Reason: {why}. {len(allowed)} of {len(buffer.tiles)} regions were sent. "
-                "You MUST tell the user which part of their screen was withheld and why. "
-                "If a credential was involved, tell them to rotate it and check whether "
-                "the file holding it is ignored by git.]"
+                f"\n\n[APERTURE: {len(allowed)} of {len(buffer.tiles)} regions were "
+                f"sent. " + " ".join(parts) + "]"
             )
         return (
             f"{text}{note}\n\n[reader: {usage['inputTokens']} in / "
