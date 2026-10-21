@@ -241,17 +241,23 @@ def guard_clipboard(
             ignore.add(key)
 
             tally.seen += 1
-            stamp = time.strftime("%H:%M:%S")
-            print(f"[{stamp}] image on clipboard, {image.width}x{image.height}")
+
+            # Read the clock on every line rather than once per image. The gate takes
+            # tens of seconds on a CPU, and stamping every line with the detection time
+            # makes that look instantaneous, which is the opposite of the truth.
+            def stamped(message: str) -> None:
+                print(f"[{time.strftime('%H:%M:%S')}] {message}")
+
+            stamped(f"image on clipboard, {image.width}x{image.height}")
 
             # 2. Take it away first. This is the fail-closed step.
             try:
                 clipboard.set_image(
                     hold_placeholder(image.size, "checking this image, one moment")
                 )
-                print(f"[{stamp}] held -- paste is blocked while we look")
+                stamped("held -- paste is blocked while we look")
             except Exception as exc:  # noqa: BLE001
-                print(f"[{stamp}] WARNING could not hold the clipboard: {exc}")
+                stamped(f"WARNING could not hold the clipboard: {exc}")
 
             # 3. Fast lane: exact, instant, gives coordinates.
             hints: list[tuple[int, int, int, int]] = []
@@ -261,19 +267,18 @@ def guard_clipboard(
                 elapsed = (time.perf_counter() - started) * 1000
                 if secrets:
                     for secret in secrets:
-                        print(f"[{stamp}] regex  {secret.kind} "
-                              f"({secret.redacted_sample}) at {secret.box}")
+                        stamped(f"regex  {secret.kind} ({secret.redacted_sample}) at {secret.box}")
                         tally.secrets.append(secret.kind)
                     hints = [s.box for s in secrets]
-                print(f"[{stamp}] fast lane done in {elapsed:.0f} ms")
+                stamped(f"fast lane done in {elapsed:.0f} ms")
 
             # 4. Judgement lane.
             result = gate.inspect(image, hint_boxes=hints)
             for name, value in result.context.items():
                 if value >= 0.3:
-                    print(f"[{stamp}] decider {name}={value:.3f}")
+                    stamped(f"decider {name}={value:.3f}")
             for finding in result.findings:
-                print(f"[{stamp}] decider {finding}")
+                stamped(f"decider {finding}")
 
             # 5. Put back whatever is safe.
             boxes = list(hints) + result.boxes()
@@ -284,21 +289,19 @@ def guard_clipboard(
                     "withheld: " + (result.reasons[0] if result.reasons else "unsafe"),
                 )
                 clipboard.set_image(replacement)
-                print(f"[{stamp}] WITHHELD  {', '.join(result.reasons)}")
+                stamped(f"WITHHELD  {chr(44).join(result.reasons)}")
             elif boxes:
                 tally.redacted += 1
                 redaction = redact(image, boxes, mode=mode)  # type: ignore[arg-type]
                 clipboard.set_image(redaction.image)
                 ignore.add(_fingerprint(redaction.image))
-                print(f"[{stamp}] REDACTED  {redaction.count} region(s), "
-                      f"{redaction.fraction_of(image):.0%} of the frame")
+                stamped(f"REDACTED  {redaction.count} region(s), {redaction.fraction_of(image):.0%} of the frame")
             else:
                 tally.passed += 1
                 clipboard.set_image(image)
-                print(f"[{stamp}] PASSED    nothing found")
+                stamped("PASSED    nothing found")
 
-            print(f"[{stamp}] {result.decider_calls} local decisions, "
-                  f"{result.decider_ms:.0f} ms | {tally.line()}")
+            stamped(f"{result.decider_calls} local decisions, {result.decider_ms:.0f} ms | {tally.line()}")
             print()
     except KeyboardInterrupt:
         pass
