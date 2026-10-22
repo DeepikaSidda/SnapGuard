@@ -95,6 +95,26 @@ $ aperture ask "my deploy is failing, what's wrong?" --screen evalset/out/deploy
 The agent asked for all four regions and got two. It still solved the problem, and told
 the user what it couldn't see and what to do about it.
 
+### See the decision
+
+```bash
+aperture check evalset/out/deploy_failure.png --explain explained.png
+```
+
+![What the gate saw](evalset/out/_explained.png)
+
+The region grid with every score the gate actually got. Green regions were sent and
+their content is legible. Region 1 was withheld at `credential 0.82` and its content is
+destroyed — blurred and washed, not merely dimmed, because the first version of this
+renderer displayed the credentials it was claiming to protect.
+
+A screen where nothing can be salvaged looks like this instead:
+
+![Everything withheld](evalset/out/_explained_contacts.png)
+
+Seven people's emails, phone numbers and home addresses. **0 of 4 regions sent, 100% kept
+local.** Both Amazon Nova models judged this screen safe to send.
+
 Note the two kinds of withholding in that last line, because they are different
 decisions. **Region 1** was held for *safety* — the credentials pane. **Region 3** was
 skipped as *irrelevant* — empty editor space that had nothing to do with a deploy error.

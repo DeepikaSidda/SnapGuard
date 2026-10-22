@@ -81,6 +81,19 @@ The agent asked for all four regions. It got two. And it still answered the ques
 
 Half my screen never left the machine, and I still got my answer.
 
+Here is the same decision drawn back onto the screen it was about:
+
+![What the gate saw](evalset/out/_explained.png)
+
+Green regions went to Bedrock and you can read them. Region 1 was withheld at
+`credential 0.82` and its content is gone.
+
+A small confession about that picture. The first version of the renderer only *dimmed*
+the withheld regions, so the diagram explaining my redaction tool displayed the AWS keys
+it was claiming to protect, perfectly legible. Had I run it on a real screenshot and
+pasted it into this article, the explain mode would have been the leak. Withheld regions
+are now blurred and washed until no glyph survives.
+
 Look closely at which regions went, because they went for two different reasons.
 **Region 1** was held back for *safety* — the credentials pane. **Region 3** was skipped
 as *irrelevant* — empty editor space with nothing to do with a failing deploy.
