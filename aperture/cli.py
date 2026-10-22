@@ -97,6 +97,17 @@ def cmd_check(args: argparse.Namespace) -> int:
         redaction.image.save(args.out)
         print(f"\n  wrote redacted copy to {args.out} "
               f"({redaction.fraction_of(image):.0%} of the frame covered)")
+
+    # The annotated view: what the gate saw, and what it decided, drawn over the screen
+    # it was looking at. Everything else about this gate is invisible.
+    if args.explain:
+        from .overlay import annotate
+        from .tiling import tile_grid
+
+        tiles = tile_grid(image, columns=args.columns, rows=args.rows)
+        shown = annotate(image, result, tiles, title=path.name)
+        shown.save(args.explain)
+        print(f"  wrote annotated view to {args.explain}")
     return 0
 
 
@@ -235,6 +246,9 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="inspect one image")
     check.add_argument("image")
     check.add_argument("--out", help="write a redacted copy here")
+    check.add_argument("--explain", metavar="PATH",
+                       help="write an annotated view showing every region's scores and "
+                            "what was decided about it")
     check.add_argument("--mode", choices=["block", "blur"], default="block")
     check.add_argument("--no-ocr", dest="ocr", action="store_false")
     check.set_defaults(func=cmd_check, ocr=True)
