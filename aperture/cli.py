@@ -27,12 +27,15 @@ from .scanner import ocr_available, scan
 BAR = "-" * 72
 
 
-def _gate(decider: Decider, columns: int, rows: int) -> RegionGate:
+def _gate(decider: Decider, columns: int, rows: int, describe: bool = False) -> RegionGate:
+    # screen_kind is a 7-option choice that is informational only -- it never fires a
+    # rule. Measured, it adds 5.9s to the context pass (10.0s -> 15.9s), so it is
+    # opt-in via --describe rather than paid for on every run.
     return RegionGate(
         decider,
         rules=REGION_RULES,
         context_rules=CONTEXT_RULES,
-        info_questions=SCREEN_KIND,
+        info_questions=SCREEN_KIND if describe else None,
         policy=Policy(fail_closed=True),
         columns=columns,
         rows=rows,
@@ -86,7 +89,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     elif args.ocr:
         print("  fast lane: OCR not installed (pip install 'aperture-gate[ocr]')")
 
-    result = _gate(decider, args.columns, args.rows).inspect(image, hint_boxes=hints)
+    result = _gate(decider, args.columns, args.rows, describe=args.describe).inspect(image, hint_boxes=hints)
     _print_result(result, image)
 
     if args.out and result.verdict in (Verdict.REDACT, Verdict.WITHHOLD):
@@ -321,6 +324,9 @@ def build_parser() -> argparse.ArgumentParser:
                             "what was decided about it")
     check.add_argument("--mode", choices=["block", "blur"], default="block")
     check.add_argument("--no-ocr", dest="ocr", action="store_false")
+    check.add_argument("--describe", action="store_true",
+                       help="also ask what kind of screen it is. Informational only, "
+                            "and it costs about 6 seconds")
     check.set_defaults(func=cmd_check, ocr=True)
 
     ask = sub.add_parser("ask", help="run the agent against a screen")

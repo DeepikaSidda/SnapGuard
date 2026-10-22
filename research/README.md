@@ -349,3 +349,78 @@ coarse values of 0.505, 0.499, 0.48, 0.40, 0.30 and 0.26, because the property h
 hold at every value rather than at the one the model happened to return that afternoon.
 It also asserts that a confidently clean batch still skips the fine pass, so the
 optimisation cannot be quietly deleted, and that the two thresholds stay far apart.
+
+---
+
+## 11. Two attempted speedups, both reverted
+
+The 47-second median is the gate's worst property, so it was worth attacking. Three
+levers were measured. Two looked safe, cost accuracy, and were reverted. One was free.
+
+### Lever 1: send smaller region tiles
+
+Tiles go out at 448px. Smaller means fewer visual tokens and a shorter forward pass.
+Measured on four known regions -- two holding a credential, two not:
+
+| Long side | Tokens | Latency | Correct | Values (dirty, clean, clean, dirty) |
+|---|---|---|---|---|
+| 448 | 214 | 7.4 s | 4/4 | 0.82 · 0.09 · 0.26 · 0.92 |
+| 384 | 186 | 6.3 s | 4/4 | 0.87 · 0.11 · 0.27 · 0.70 |
+| 336 | 168 | 5.4 s | 4/4 | 0.81 · 0.09 · **0.48** · 0.77 |
+| 288 | 168 | 5.2 s | 4/4 | 0.74 · 0.09 · 0.17 · 0.89 |
+| 224 | 168 | 5.0 s | 4/4 | **0.50** · 0.10 · 0.17 · 0.77 |
+
+**Accuracy stayed 4/4 at every size, which made it look free.** The margins did not. At
+336px a clean region answered 0.48 against a 0.50 threshold -- 0.02 from a false
+positive. At 224px a region holding a credential answered exactly 0.50.
+
+Section 10 is the record of a credential slipping through on a 0.005 margin. Trading
+2.4 s for a reintroduction of that failure mode is not a trade. **Accuracy was the wrong
+metric; margin was the metric.** Not applied.
+
+### Lever 2: send the whole-frame context pass smaller
+
+The context questions are about layout and colour -- is this a banking page, is this a
+private conversation -- not about glyphs, so they looked like the safe thing to shrink.
+On the fixture screen they were:
+
+| Long side | Latency | private_conversation | financial_records | identity_document |
+|---|---|---|---|---|
+| 448 | 10.0 s | 0.04 | 0.07 | 0.05 |
+| 336 | 7.5 s | 0.06 | 0.07 | 0.05 |
+
+Same answers, 2.5 s cheaper. Applied, then measured across the whole eval set:
+
+| | Accuracy | Held-out | Median |
+|---|---|---|---|
+| Context at 448px | **12/12** | 6/6 | 47.2 s |
+| Context at 336px | 11/12 | 5/6 | 41.1 s |
+
+It **let `token_in_url` through** -- the hardest false-negative case in the set. That
+frame is not caught by the credential rule at all; it is caught by `financial_records`
+firing on its reconciliation figures, and at 336px that detail is gone.
+
+Six seconds for a false negative on the hardest case. Reverted.
+
+### Lever 3: stop asking a question that never fires
+
+`screen_kind` is a 7-option `choice` describing what kind of screen it is. It is
+informational -- it is recorded and shown, and it never fires a rule.
+
+| Context pass | Questions | Latency | Tokens |
+|---|---|---|---|
+| 3 rules only | 3 | 10.0 s | 358 |
+| 3 rules + `screen_kind` | 4 | **15.9 s** | 492 |
+
+**5.9 seconds for a caption.** Removing a question that cannot change a verdict cannot
+cause a miss, so this one is safe. It is now behind `--describe`, off by default.
+
+### What these three have in common
+
+Levers 1 and 2 were the same mistake twice: **generalising from one screen.** Both were
+measured on a probe where they looked free, applied, and then found to cost accuracy on
+the full set. The only safe optimisation was deleting work that could not affect the
+answer.
+
+Final state: 12/12, held-out 6/6, median 48.8 s. Roughly six seconds faster than before
+this exercise, all of it from lever 3, and two documented reasons not to go further.

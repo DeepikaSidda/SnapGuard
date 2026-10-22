@@ -273,6 +273,24 @@ class RegionGate:
         rows: int = 2,
         state: str = "A region of a screen captured on a computer.",
         context_state: str = "A screenshot of an application window on a computer.",
+        # Full resolution, and it stays that way. Two attempts to shrink images for
+        # speed were measured and both were reverted:
+        #
+        #   Region tiles. Shrinking kept accuracy at 4/4 on a four-case probe while
+        #   collapsing the margins -- a clean region reached 0.48 against a 0.50
+        #   threshold at 336px, and a region holding a credential fell to exactly 0.50
+        #   at 224px. Accuracy hid the risk.
+        #
+        #   This whole-frame pass. At 336px the three context rules answered the same
+        #   on the fixture screen (0.06/0.07/0.05 against 0.04/0.07/0.05) and saved
+        #   2.5s, so it looked free. Measured across the whole eval set it dropped
+        #   12/12 to 11/12 and LET token_in_url THROUGH: that frame is caught by
+        #   financial_records firing on its reconciliation figures, and at 336px that
+        #   detail is gone.
+        #
+        # Both errors were the same error -- generalising from one screen. See
+        # research/README.md section 11.
+        context_long_side: int = 448,
         batch_state: str = (
             "Several regions cut from the same screenshot are shown, one after another."
         ),
@@ -291,6 +309,7 @@ class RegionGate:
         self.rows = rows
         self.state = state
         self.context_state = context_state
+        self.context_long_side = context_long_side
         self.batch_state = batch_state
 
     # ---- the three passes --------------------------------------------------
@@ -306,7 +325,9 @@ class RegionGate:
             return
         questions = {r.name: r.question for r in self.context_rules}
         questions.update(self.info_questions)
-        reply = self.decider.ask(self.context_state, questions, [image])
+        reply = self.decider.ask(
+            self.context_state, questions, [_shrink(image, self.context_long_side)]
+        )
         result.decider_calls += 1
         result.decider_ms += reply.latency_ms
 
@@ -490,6 +511,17 @@ class RegionGate:
 
         result.verdict = self.policy.decide(result.findings)
         return result
+
+
+def _shrink(image: Image.Image, long_side: int) -> Image.Image:
+    """Downscale for the whole-frame pass. Never upscales."""
+    if max(image.size) <= long_side:
+        return image
+    scale = long_side / max(image.size)
+    return image.resize(
+        (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+        Image.LANCZOS,
+    )
 
 
 def _overlaps_any(
