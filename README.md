@@ -384,8 +384,15 @@ optimisation, Decider is the safety net.** Not the other way round.
   speed bump, not a guarantee, and thresholds here are deliberately biased toward
   withholding.
 - **Ten synthetic screens is a small benchmark**, and six of them informed the thresholds.
-- **It is slow without a GPU.** 11–12 s per decision on an i5-1235U. AWS report ~115 ms on
-  an RTX 3090; the community's hosted CPU deployment reports ~681 ms on 4 vCPUs.
+- **It is slow without a GPU.** 11–12 s per decision on an i5-1235U, median 43 s for a
+  whole screen. AWS report ~115 ms on an RTX 3090; the community's hosted CPU deployment
+  reports ~681 ms on 4 vCPUs.
+- **It needs about 7 GB of RAM, resident, for as long as the server runs.** On CPU the
+  torso loads in fp32, so `strands-decider serve` sits at ~6.96 GB. On a 16 GB laptop
+  with an editor and a browser open that leaves very little headroom: running the full
+  test suite under those conditions took 29 minutes instead of 12 and produced three
+  fixture *setup* failures from memory pressure, not from any defect. Close what you can,
+  or give it a machine with 32 GB.
 - **macOS is implemented but untested.** `aperture/watch.py` has an `NSPasteboard`
   backend written against the AppKit API and never run on hardware, because this was
   built on Windows. It is labelled as such in the code. Reports welcome.
