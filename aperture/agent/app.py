@@ -98,7 +98,9 @@ def build(
         decider,
         rules=REGION_RULES,
         context_rules=CONTEXT_RULES,
-        info_questions=SCREEN_KIND,
+        # The caption is informational and costs ~6s of the context pass; the agent
+        # never uses it, so it is not asked for.
+        info_questions=None,
         # Both axes of the context-and-memory decision. Safety alone tells you what you
         # *may* send; relevance tells you what is worth sending, and the intersection is
         # what actually reaches Bedrock.

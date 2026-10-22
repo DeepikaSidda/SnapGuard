@@ -216,6 +216,7 @@ def guard_clipboard(
     use_ocr: bool = True,
     notify: bool = True,
     vault: "Vault | None" = None,
+    describe: bool = False,
 ) -> int:
     """Watch the clipboard until Ctrl+C, or until `minutes` have passed."""
     clipboard = get_clipboard()
@@ -226,7 +227,8 @@ def guard_clipboard(
         decider,
         rules=REGION_RULES,
         context_rules=CONTEXT_RULES,
-        info_questions=SCREEN_KIND,
+        # Informational only, and it costs ~6s of the context pass. Off unless asked.
+        info_questions=SCREEN_KIND if describe else None,
         policy=Policy(fail_closed=True),
         columns=columns,
         rows=rows,
@@ -477,6 +479,7 @@ def guard_folders(
     use_ocr: bool = True,
     replace: bool = False,
     notify: bool = True,
+    describe: bool = False,
 ) -> int:
     """Watch screenshot folders and redact new captures that are not safe to share.
 
@@ -502,7 +505,8 @@ def guard_folders(
         decider,
         rules=REGION_RULES,
         context_rules=CONTEXT_RULES,
-        info_questions=SCREEN_KIND,
+        # Informational only, and it costs ~6s of the context pass. Off unless asked.
+        info_questions=SCREEN_KIND if describe else None,
         policy=Policy(fail_closed=True),
         columns=columns,
         rows=rows,

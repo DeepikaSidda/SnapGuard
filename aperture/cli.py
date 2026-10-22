@@ -216,6 +216,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
         use_ocr=args.ocr,
         notify=args.notify,
         vault=vault,
+        describe=args.describe,
     )
 
 
@@ -363,6 +364,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="keep only the newest N captures (default 20)")
     guard.add_argument("--vault-days", type=int, default=7, metavar="D",
                        help="delete captures older than D days (default 7)")
+    guard.add_argument("--describe", action="store_true",
+                       help="also ask what kind of screen it is. Informational only, "
+                            "and it costs about 6 seconds per capture")
     guard.set_defaults(func=cmd_guard, ocr=True, notify=True)
 
     vault = sub.add_parser("vault", help="inspect or empty the quarantine folder")
