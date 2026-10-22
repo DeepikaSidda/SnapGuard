@@ -252,6 +252,12 @@ class RegionGate:
         context_rules: Sequence[Rule] = (),
         policy: Policy | None = None,
         info_questions: Mapping[str, dict[str, Any]] | None = None,
+        # A batch is only skipped when the batched question answers BELOW this. It is
+        # much lower than any rule threshold on purpose: see `_coarse_pass`. Measured,
+        # clean batches answer around 0.061 and a batch containing a credential answers
+        # 0.505 to 0.548, so 0.25 separates them with wide margin on both sides, where
+        # the rule's own 0.50 threshold left 0.005.
+        coarse_clear_below: float = 0.25,
         # Scored alongside the sensitivity rules when `inspect` is given a question.
         # A factory rather than a Rule, because the question has to quote what the user
         # actually asked, which is not known until inspection time.
@@ -277,6 +283,7 @@ class RegionGate:
         self.rules = list(rules)
         self.context_rules = list(context_rules)
         self.info_questions = dict(info_questions or {})
+        self.coarse_clear_below = coarse_clear_below
         self.relevance = relevance
         self.legibility = legibility
         self.policy = policy or Policy()
@@ -321,8 +328,23 @@ class RegionGate:
     ) -> list[list[Tile]]:
         """Screen batches of tiles, and return the batches that need splitting.
 
-        Only rules that supplied `any_question` can be screened this way. Anything else
-        falls through to the fine pass.
+        **The coarse pass may only skip work, never clear a frame.** It is judged
+        against `coarse_clear_below`, not against each rule's own threshold, and the two
+        are deliberately far apart.
+
+        Why: measured on the fixture screen, the batched "does ANY of these contain a
+        credential" question answers 0.505 where the rule threshold is 0.500 -- a margin
+        of 0.005. A screenshot with a live AWS key in it passed cleanly through a real
+        run because that number landed a hair under the line, all four tiles were
+        cleared, and no fine pass ever ran. The fine pass on the same tile scores 0.824.
+
+        So the batched question is a cheap way to recognise an *obviously* clean batch
+        (clean batches measured 0.061) and nothing more. Anything above
+        `coarse_clear_below` goes to the fine pass, which is the only place a region is
+        allowed to be cleared.
+
+        Only rules that supplied `any_question` can be screened this way. If none did,
+        every batch is treated as hot.
         """
         screenable = [r for r in self.rules if r.any_question]
         if not screenable:
@@ -339,8 +361,14 @@ class RegionGate:
             )
             result.decider_calls += 1
             result.decider_ms += reply.latency_ms
-            if any(r.fires(reply.value(r.name)) for r in screenable):
+
+            highest = max(reply.value(r.name) for r in screenable)
+            if highest >= self.coarse_clear_below:
                 hot.append(batch)
+                result.notes.append(
+                    f"coarse screen returned {highest:.3f} for a batch of "
+                    f"{len(batch)}; examined each region individually"
+                )
             else:
                 result.cleared.extend(batch)
         return hot

@@ -272,3 +272,80 @@ address in one corner would be a better test of the lower bound, and has not bee
   stops firing.
 - Credit card numbers, national ID numbers, and medical records: no rule exists for any of
   them. They are listed as gaps in the README rather than implied to work.
+
+---
+
+## 10. A false negative, and the design error behind it
+
+The benchmark said 12/12. Then a real `guard` run passed a screenshot with a live-looking
+AWS key straight through:
+
+```
+[15:55:38] image on clipboard, 1920x1080
+[15:55:38] held -- paste is blocked while we look
+[15:55:42] fast lane done in 4195 ms          <- no regex hit on this run
+[15:56:15] PASSED    nothing found
+[15:56:15] 2 local decisions, 32821 ms
+```
+
+The same image had been redacted reliably in every earlier run, at `credential 0.824`.
+
+### Diagnosis
+
+Two candidates. The first was wrong:
+
+**Not the clipboard.** The round-trip through `CF_DIB` is lossless. Measured: 0 of 17,325
+sampled pixels changed, OCR recovered the same 726 characters, and the regex found
+`aws_access_key_id` both from disk and after the round-trip.
+
+**The coarse screen.** Measured on the fixture screen:
+
+| | Value |
+|---|---|
+| Coarse "does ANY of these 4 regions contain a credential?" | **0.505** |
+| The `credential` rule threshold | **0.500** |
+| **Margin** | **0.005** |
+| Fine pass on the dirty region alone | 0.824 |
+| Coarse, on a batch of four clean regions | 0.061 |
+
+The batched question sat on the knife edge. When it landed a hair under 0.500 — and it
+did — all four regions were cleared, the fine pass never ran, and a frame with a
+credential in it was declared clean.
+
+### The design error
+
+The coarse pass was an optimisation. It was also, accidentally, allowed to make the
+safety decision. An optimisation that can clear a frame is not an optimisation.
+
+The gate now judges the batched question against its own `coarse_clear_below` (0.25),
+deliberately far from any rule threshold. Clean batches answer around 0.061, so they are
+still skipped; anything above 0.25 goes to the fine pass, which is the only place a
+region may be cleared.
+
+### Cost of failing closed
+
+| | Before | After |
+|---|---|---|
+| `deploy_failure.png` with OCR off | 2 calls, 33 s, **passed (wrong)** | 6 calls, 94 s, redacted |
+| Median across the 12-screen set | — | 47.2 s |
+| Accuracy across the 12-screen set | 12/12 | 12/12 |
+
+Roughly three times the calls on a frame that needs examining, no change on clean frames,
+and the verdict is now recorded in `result.notes`:
+
+```
+coarse screen returned 0.505 for a batch of 4; examined each region individually
+```
+
+### What this says about the benchmark
+
+12/12 was true and insufficient. The benchmark exercises `inspect()` with the OCR hint
+available, so the fragile path — coarse screening with no hint — was never the thing
+being measured. A test suite can be green while the configuration people actually run is
+broken.
+
+`tests/test_coarse_fail_closed.py` drives the policy with a stub decider across
+coarse values of 0.505, 0.499, 0.48, 0.40, 0.30 and 0.26, because the property has to
+hold at every value rather than at the one the model happened to return that afternoon.
+It also asserts that a confidently clean batch still skips the fine pass, so the
+optimisation cannot be quietly deleted, and that the two thresholds stay far apart.
