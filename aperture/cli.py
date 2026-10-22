@@ -131,6 +131,21 @@ def cmd_ask(args: argparse.Namespace) -> int:
         print(f"\n{BAR}\n  THE GATE RAN\n{BAR}")
         _print_result(result, Image.new("RGB", (1, 1)))
         print(BAR)
+        # The agent is the thing being judged, so its run should produce the same
+        # annotated figure that `check --explain` does. The gate fires once per
+        # capture, and this is the only moment where both the result and the buffered
+        # image are in scope together.
+        if args.explain and session.buffer.image is not None:
+            from .overlay import annotate
+
+            shown = annotate(
+                session.buffer.image,
+                result,
+                session.buffer.tiles,
+                title=args.question[:60],
+            )
+            shown.save(args.explain)
+            print(f"  wrote annotated view to {args.explain}\n")
 
     session = build(
         screen=screen,
@@ -257,6 +272,9 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("question")
     ask.add_argument("--screen", help="an image to use instead of a live capture")
     ask.add_argument("--model", default=None)
+    ask.add_argument("--explain", metavar="PATH",
+                     help="write an annotated view of what the gate decided during "
+                          "this run")
     ask.set_defaults(func=cmd_ask)
 
     guard = sub.add_parser("guard", help="watch the clipboard, or screenshot folders")
