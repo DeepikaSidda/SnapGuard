@@ -299,11 +299,47 @@ paste. Paste is briefly unavailable; that is the trade.
 - **Only while the command runs.** No service, no autostart, no tray icon, and no
   `--install-autostart` flag — if the capability doesn't exist it can't be switched on by
   accident.
-- **Nothing written to disk.** Verdicts and numbers go to the console. Pixels don't go
-  anywhere.
+- **Nothing written to disk**, unless you turn on the quarantine below.
 
 A tool that inspects your screen has to be more trustworthy than the thing it protects you
 from.
+
+### Keeping the blocked screenshot: `--vault`
+
+Blocking is useful and lossy. Your clipboard gets the redacted copy, and the original —
+the one you actually took — is gone. Sometimes you still want it: for a bug report, for
+your own notes, to send over a channel you trust.
+
+```bash
+aperture guard --vault                      # ~/.aperture/quarantine
+aperture guard --vault D:\secrets --vault-keep 5 --vault-days 2
+aperture vault                              # list what's in there
+aperture vault --purge                      # empty it
+```
+
+Each blocked capture is stored three ways: the **original unredacted**, the redacted copy,
+and a JSON sidecar with the verdict and the per-region scores, so you can tell why
+something is quarantined without opening it.
+
+```
+2026-10-22T153115_redact.png            69 KB   original, unredacted
+2026-10-22T153115_redact.redacted.png   44 KB   what went to your clipboard
+2026-10-22T153115_redact.json                   verdict, reasons, scores
+```
+
+Verified with OCR: the original still yields a detectable `aws_access_key_id`, the
+redacted copy yields none.
+
+**This writes your secrets to disk, so it is off by default and it tells you so.** The
+guard's banner changes from *"nothing is written to disk"* to *"BLOCKED CAPTURES ARE SAVED
+UNREDACTED"* when the flag is on. On first use it writes a README into the folder saying
+what's in there, best-effort restricts the folder to your user account via `icacls`, and
+**warns you if the path is inside OneDrive, Dropbox, iCloud or a git repo** — a quarantine
+that syncs to the cloud defeats the entire point.
+
+Retention is finite by default: the newest 20 captures, nothing older than 7 days, purged
+on every write. A quarantine that only grows is an archive of your credentials, which is
+the opposite of the intent. Nothing is encrypted — it's a tidy drawer, not a safe.
 
 ---
 

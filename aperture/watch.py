@@ -43,6 +43,7 @@ from .patterns import Policy, RegionGate, Verdict
 from .questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND
 from .redact import hold_placeholder, redact
 from .scanner import ocr_available, scan
+from .vault import Vault
 
 
 def _verdict_lines(result, secrets: list[str], covered: float | None) -> list[str]:
@@ -214,6 +215,7 @@ def guard_clipboard(
     mode: str = "block",
     use_ocr: bool = True,
     notify: bool = True,
+    vault: "Vault | None" = None,
 ) -> int:
     """Watch the clipboard until Ctrl+C, or until `minutes` have passed."""
     clipboard = get_clipboard()
@@ -244,9 +246,18 @@ def guard_clipboard(
     print(f"  grid      : {columns}x{rows} regions, redaction mode '{mode}'")
     if deadline:
         print(f"  expires   : in {minutes} minutes")
+    if vault:
+        vault.prepare()
+        print(f"  {vault.banner()}")
+        for warning in vault.warnings:
+            print(f"  WARNING   : {warning}")
     print()
     print("  images only -- text on the clipboard is never read")
-    print("  nothing is written to disk; no autostart, no service")
+    if vault:
+        # The honest version of the line below, when the vault is on.
+        print("  BLOCKED CAPTURES ARE SAVED UNREDACTED to the quarantine folder above")
+    else:
+        print("  nothing is written to disk; no autostart, no service")
     print("  Ctrl+C to disarm")
     print("=" * 72)
     print()
@@ -317,11 +328,29 @@ def guard_clipboard(
                 clipboard.set_image(replacement)
                 ignore.add(_fingerprint(replacement))
                 stamped(f"WITHHELD  {chr(44).join(result.reasons)}")
+
+                # The original is otherwise lost at this point: the clipboard now holds
+                # a placeholder and nothing was ever written to disk. Quarantine it so
+                # the user still has their screenshot, just not in a pasteable form.
+                kept = None
+                if vault:
+                    kept = vault.store(
+                        image,
+                        verdict=result.verdict.value,
+                        reasons=result.reasons,
+                        scores=result.scores,
+                        secret_kinds=found,
+                    )
+                    stamped(f"quarantined original -> {kept.name}")
+
                 notifier.verdict(
                     kind="withhold",
                     title="Screenshot withheld",
                     lines=_verdict_lines(result, found, 1.0)
-                    + ["Your clipboard does NOT contain the original."],
+                    + (
+                        [f"Original kept at {kept.name}"] if kept
+                        else ["Your clipboard does NOT contain the original."]
+                    ),
                     seconds=10,
                 )
             elif boxes:
@@ -331,12 +360,28 @@ def guard_clipboard(
                 ignore.add(_fingerprint(redaction.image))
                 covered = redaction.fraction_of(image)
                 stamped(f"REDACTED  {redaction.count} region(s), {covered:.0%} of the frame")
+
+                kept = None
+                if vault:
+                    # Store the redacted copy alongside the original, so the folder is
+                    # also a record of what the gate actually did.
+                    kept = vault.store(
+                        image,
+                        verdict=result.verdict.value,
+                        reasons=result.reasons,
+                        scores=result.scores,
+                        secret_kinds=found,
+                        redacted=redaction.image,
+                    )
+                    stamped(f"quarantined original -> {kept.name}")
+
                 notifier.verdict(
                     kind="redact",
                     title=f"Redacted {redaction.count} region"
                           f"{'s' if redaction.count != 1 else ''}",
                     lines=_verdict_lines(result, found, covered)
-                    + ["Safe copy is on your clipboard."],
+                    + ["Safe copy is on your clipboard."]
+                    + ([f"Original kept at {kept.name}"] if kept else []),
                     seconds=9,
                 )
             else:

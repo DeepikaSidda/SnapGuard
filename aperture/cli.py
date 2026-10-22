@@ -173,9 +173,25 @@ def cmd_ask(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- guard
 
 
+def _vault_from(args: argparse.Namespace):
+    """Build a Vault if the user asked for one. Off unless requested."""
+    if not getattr(args, "vault", None):
+        return None
+    from .vault import DEFAULT_DIRECTORY, Vault
+
+    # `--vault` with no value means the default location; `--vault PATH` overrides it.
+    directory = None if args.vault is True else args.vault
+    return Vault(
+        directory or DEFAULT_DIRECTORY,
+        keep=args.vault_keep,
+        max_age_days=args.vault_days,
+    )
+
+
 def cmd_guard(args: argparse.Namespace) -> int:
     from .watch import guard_clipboard, guard_folders
 
+    vault = _vault_from(args)
     if args.folders or args.dirs:
         return guard_folders(
             directories=[Path(d) for d in args.dirs] if args.dirs else None,
@@ -196,10 +212,49 @@ def cmd_guard(args: argparse.Namespace) -> int:
         mode=args.mode,
         use_ocr=args.ocr,
         notify=args.notify,
+        vault=vault,
     )
 
 
 # --------------------------------------------------------------------------- doctor
+
+
+def cmd_vault(args: argparse.Namespace) -> int:
+    from .vault import DEFAULT_DIRECTORY, Vault
+
+    store = Vault(args.path or DEFAULT_DIRECTORY)
+    if not store.directory.exists():
+        print(f"no quarantine folder at {store.directory}")
+        print("turn it on with: aperture guard --vault")
+        return 0
+
+    entries = store.entries()
+    print(store.banner())
+    for warning in store.warnings:
+        print(f"  WARNING: {warning}")
+
+    if args.purge:
+        removed = store.empty()
+        print(f"\ndeleted {removed} capture{'' if removed == 1 else 's'}")
+        return 0
+
+    if not entries:
+        print("\nempty")
+    else:
+        print(f"\n{'CAPTURE':<34}{'SIZE':>12}{'VERDICT':>12}  WHY")
+        print("-" * 96)
+        for entry in entries:
+            reason = "; ".join(entry.reasons)[:34] or "-"
+            print(f"{entry.image_path.name:<34}"
+                  f"{entry.size[0]}x{entry.size[1]:<7}"
+                  f"{entry.verdict:>12}  {reason}")
+        print("\nThese are UNREDACTED originals. Empty with: aperture vault --purge")
+
+    if args.open_it:
+        import subprocess
+
+        subprocess.run(["explorer", str(store.directory)], check=False)
+    return 0
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -293,7 +348,25 @@ def build_parser() -> argparse.ArgumentParser:
                             "a .safe.png copy beside it")
     guard.add_argument("--no-notify", dest="notify", action="store_false",
                        help="do not show the on-screen panel; console log only")
+    guard.add_argument("--vault", nargs="?", const=True, default=None, metavar="PATH",
+                       help="keep the ORIGINAL of every blocked capture in a local "
+                            "quarantine folder, so you do not lose the screenshot. "
+                            "Writes unredacted secrets to disk. Default location is "
+                            "~/.aperture/quarantine")
+    guard.add_argument("--vault-keep", type=int, default=20, metavar="N",
+                       help="keep only the newest N captures (default 20)")
+    guard.add_argument("--vault-days", type=int, default=7, metavar="D",
+                       help="delete captures older than D days (default 7)")
     guard.set_defaults(func=cmd_guard, ocr=True, notify=True)
+
+    vault = sub.add_parser("vault", help="inspect or empty the quarantine folder")
+    vault.add_argument("--path", default=None,
+                       help="a quarantine folder other than the default")
+    vault.add_argument("--purge", action="store_true",
+                       help="delete every capture in it")
+    vault.add_argument("--open", dest="open_it", action="store_true",
+                       help="open the folder in Explorer")
+    vault.set_defaults(func=cmd_vault)
 
     doctor = sub.add_parser("doctor", help="check the moving parts")
     doctor.set_defaults(func=cmd_doctor)
