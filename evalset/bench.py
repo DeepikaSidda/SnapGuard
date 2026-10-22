@@ -61,12 +61,22 @@ TRUTH: dict[str, str] = {
     # One false-negative trap: a real token in a browser address bar, small and easy
     # to miss, which is the case the 448 px downscale handles worst.
     "token_in_url": "hold",
+    # --- coverage for two rules that shipped with no test image at all ---
+    # identity_document and personal_contact were written from intuition and never
+    # verified, which is worse than omitting them, because the README advertised them.
+    "id_card": "hold",    # licence layout: portrait, name, DOB, document number
+    "contacts": "hold",   # CRM list: names, emails, phone numbers, home addresses
 }
 
 # Written after the rubric was fixed, specifically to break it, and no threshold was
 # changed in response. The honest comparison lives here; the other six were development
 # material and Decider has effectively seen them.
-HELD_OUT = frozenset({"sha_soup", "public_metrics", "dark_editor", "token_in_url"})
+HELD_OUT = frozenset({
+    "sha_soup", "public_metrics", "dark_editor", "token_in_url",
+    # Also held out: written after the rubric was fixed, to cover rules that had never
+    # been exercised. No threshold was adjusted after seeing the results.
+    "id_card", "contacts",
+})
 
 NOVA_MODELS = ("us.amazon.nova-2-lite-v1:0", "us.amazon.nova-pro-v1:0")
 

@@ -207,28 +207,35 @@ decider calls and returns `UNREADABLE`, which fails closed.
 
 ## The measurement I didn't expect
 
-Ten labelled screens. Same questions, same ground truth, Decider against two Amazon Nova
-models on Bedrock.
+Twelve labelled screens. Same questions, same ground truth, Decider against two Amazon
+Nova models on Bedrock.
 
-| System | Accuracy | Held-out only | Median | Cost / 10 screens |
+| System | Accuracy | Held-out only | Median | Cost / 12 screens |
 |---|---|---|---|---|
-| **Decider 2B (local, CPU)** | **10/10** | **4/4** | 44.2 s | **$0.00** |
-| Nova 2 Lite | 9/10 | 3/4 | 1.6 s | $0.00031 |
-| Nova Pro | 8/10 | 2/4 | 1.1 s | $0.00773 |
+| **Decider 2B (local, CPU)** | **12/12** | **6/6** | 76.2 s | **$0.00** |
+| Nova 2 Lite | 10/12 | 4/6 | 1.1 s | $0.00037 |
+| Nova Pro | 9/12 | 3/6 | 1.2 s | $0.00927 |
 
-**The bigger cloud model did worst.**
+**The bigger cloud model did worst.** And the failures were not all equal.
 
-Both Nova models flagged a screen full of git SHAs, Docker digests and request UUIDs as
-containing secrets. Nova Pro also flagged a public revenue dashboard — a page of numbers
-belonging to nobody. Generative models see a long hex string and cry secret.
+The one that matters: **both Nova models let my contacts screen through.** It is a CRM list
+of seven people with their email addresses, international phone numbers and home
+addresses, and both models judged it safe to send to a cloud service. Decider flagged
+every region of it, between 0.697 and 0.835.
 
-Decider passed all three of my false-positive traps *and* caught the one I hid in a
-browser address bar, which is the hardest case for a model that downscales to 448 px.
+The other kind: both over-flagged a screen of git SHAs, Docker digests and request UUIDs.
+Nova Pro also flagged a public revenue dashboard — a page of numbers belonging to nobody.
+Generative models see a long hex string and cry secret.
+
+Those two mistakes are not comparable. Over-flagging costs me a retry. Waving a page of
+personal data through costs somebody their privacy. On this set the 2B local model made
+neither.
 
 Read the held-out column, not the headline. I chose thresholds while looking at the first
-six screens, so Decider has effectively seen them. The four adversarial screens were
-written afterwards, specifically to break my rubric, and I changed nothing in response.
-Ten synthetic screens is still a small set.
+six screens, so Decider has effectively seen them. The six in `hard_screens.py` came
+later — four built to provoke false positives, two built because I was asked whether every
+rule had been tested and discovered two of them never had. Nothing was tuned in response
+to any of them. Twelve synthetic screens is still a small set.
 
 ## The reusable pattern
 

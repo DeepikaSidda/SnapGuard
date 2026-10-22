@@ -162,3 +162,112 @@ if __name__ == "__main__":
     for fn in (sha_soup, public_metrics, dark_editor, token_in_url):
         fn()
         print(f"wrote {fn.__name__}.png")
+
+
+# --------------------------------------------------------------------------- coverage
+#
+# Two rules shipped without a single test image behind them: identity_document and
+# personal_contact. They were written from intuition and never verified, which is worse
+# than not having them, because the README listed them as things the gate detects.
+#
+# A caveat that belongs in the results rather than hidden here: a *drawn* face is a weak
+# proxy for a photograph. The rule asks about "a photograph of a person's face", and PIL
+# shapes are not a photograph. If the rule fails on these, the honest reading is "not
+# demonstrated either way" rather than "the rule is broken" -- and that is how it is
+# reported.
+
+
+def id_card() -> None:
+    """A driving-licence style record on screen: portrait, name, date of birth, number."""
+    img = Image.new("RGB", (W, H), "#eef0f4")
+    d = ImageDraw.Draw(img)
+    chrome(d, "Record 88241 - Membership Administration", dark=False)
+
+    d.text((48, 72), "Member record", font=font(28), fill="#14141c")
+
+    # The card.
+    card = (60, 140, 980, 660)
+    d.rounded_rectangle(card, 18, fill="#ffffff", outline="#b9bfcc", width=2)
+    d.rounded_rectangle((60, 140, 980, 230), 18, fill="#1b4e8f")
+    d.text((92, 168), "NATIONAL DRIVING LICENCE", font=font(24), fill="white")
+
+    # Portrait: a face-like arrangement. Cartoonish by necessity -- see the note above.
+    px, py = 110, 270
+    d.rectangle([px, py, px + 230, py + 300], fill="#d7dae2", outline="#9aa1b1")
+    d.ellipse([px + 55, py + 180, px + 175, py + 330], fill="#c98f6a")       # shoulders
+    d.ellipse([px + 68, py + 48, px + 162, py + 186], fill="#e0a67c")        # head
+    d.ellipse([px + 66, py + 44, px + 164, py + 96], fill="#3b2f2a")         # hair
+    d.ellipse([px + 92, py + 108, px + 106, py + 120], fill="#2a2a30")       # left eye
+    d.ellipse([px + 126, py + 108, px + 140, py + 120], fill="#2a2a30")      # right eye
+    d.line([(px + 115, py + 122), (px + 115, py + 142)], fill="#b07a56", width=3)
+    d.arc([px + 98, py + 136, px + 134, py + 162], 10, 170, fill="#8d5a46", width=4)
+
+    fields = [
+        ("SURNAME", "HARPER"),
+        ("GIVEN NAMES", "JORDAN ALEX"),
+        ("DATE OF BIRTH", "14.03.1991"),
+        ("LICENCE NO.", "HARPE903149JA7NM"),
+        ("ISSUED", "02.08.2023"),
+        ("EXPIRES", "02.08.2033"),
+    ]
+    for i, (label, value) in enumerate(fields):
+        y = 272 + i * 58
+        d.text((380, y), label, font=font(13), fill="#73798a")
+        d.text((380, y + 20), value, font=font(21), fill="#14141c")
+
+    d.text((60, 700), "Verified against the national register on 19.10.2026",
+           font=font(15), fill="#73798a")
+    img.save(HERE / "id_card.png")
+
+
+def contacts() -> None:
+    """A CRM contact list: real-looking names, emails, phone numbers, home addresses."""
+    img = Image.new("RGB", (W, H), "#ffffff")
+    d = ImageDraw.Draw(img)
+    chrome(d, "Contacts - Northfield CRM", dark=False)
+
+    d.rectangle([0, 44, W, 120], fill="#f6f7fa", outline="#e2e5ec")
+    d.text((48, 70), "Contacts  -  412 records", font=font(24), fill="#14141c")
+
+    headers = ("NAME", "EMAIL", "PHONE", "HOME ADDRESS")
+    xs = (48, 430, 920, 1230)
+    for x, head in zip(xs, headers):
+        d.text((x, 150), head, font=font(14), fill="#73798a")
+    d.line([(48, 178), (W - 48, 178)], fill="#e2e5ec", width=2)
+
+    rows = [
+        ("Priya Raman", "priya.raman@northfield.co", "+44 7700 900318",
+         "14 Marlow Gardens, Leeds LS6 2QT"),
+        ("Tomas Alvarez", "t.alvarez@gmail.com", "+1 (415) 555-0162",
+         "882 Clayton St, San Francisco CA"),
+        ("Dana Okafor", "dana.okafor@northfield.co", "+234 802 555 0147",
+         "27 Awolowo Road, Ikoyi, Lagos"),
+        ("Marta Kowalczyk", "marta.k91@outlook.com", "+48 601 555 284",
+         "ul. Dluga 14/3, 31-147 Krakow"),
+        ("Samuel Devlin", "sam.devlin@northfield.co", "+353 85 555 0119",
+         "6 Grattan Court, Dublin 2"),
+        ("Aisha Siddiqui", "aisha.s@fastmail.com", "+91 98200 55471",
+         "Flat 702, Pali Hill, Mumbai 400050"),
+        ("Henrik Bakke", "h.bakke@northfield.co", "+47 905 55 218",
+         "Storgata 44B, 0184 Oslo"),
+    ]
+    for i, row in enumerate(rows):
+        y = 200 + i * 78
+        if i % 2 == 0:
+            d.rectangle([48, y - 12, W - 48, y + 54], fill="#fafbfd")
+        d.ellipse([52, y + 2, 84, y + 34], fill="#c6cbd8")
+        for x, cell, size in zip(xs, row, (18, 17, 17, 16)):
+            offset = 44 if x == 48 else 0
+            d.text((x + offset, y + 8), cell, font=font(size), fill="#2c303a")
+
+    img.save(HERE / "contacts.png")
+
+
+def _extra() -> None:
+    for fn in (id_card, contacts):
+        fn()
+        print(f"wrote {fn.__name__}.png")
+
+
+if __name__ == "__main__" and "--extra" in __import__("sys").argv:
+    _extra()

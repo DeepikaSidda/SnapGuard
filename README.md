@@ -105,24 +105,33 @@ reasons. The rest was simply not worth sending.
 
 ## Measured against Amazon Nova
 
-Ten labelled screens, same questions, same ground truth
+Twelve labelled screens, same questions, same ground truth
 ([`evalset/bench.py`](evalset/bench.py), raw output in `evalset/results.json`):
 
-| System | Accuracy | Held-out only | Median | Cost / 10 screens |
+| System | Accuracy | Held-out only | Median | Cost / 12 screens |
 |---|---|---|---|---|
-| **Decider 2B (local, CPU)** | **10/10** | **4/4** | 44.2 s | **$0.00** |
-| Nova 2 Lite (Bedrock) | 9/10 | 3/4 | 1.6 s | $0.00031 |
-| Nova Pro (Bedrock) | 8/10 | 2/4 | 1.1 s | $0.00773 |
+| **Decider 2B (local, CPU)** | **12/12** | **6/6** | 76.2 s | **$0.00** |
+| Nova 2 Lite (Bedrock) | 10/12 | 4/6 | 1.1 s | $0.00037 |
+| Nova Pro (Bedrock) | 9/12 | 3/6 | 1.2 s | $0.00927 |
 
-The *larger* cloud model did worst. Both Nova models over-flagged a screen full of git
-SHAs and digests; Nova Pro also flagged a public revenue dashboard. Generative models see
-hex strings and cry secret. Narrow calibrated questions with the verdict composed in code
-were more precise.
+The *larger* cloud model did worst, and the failures split into two very different kinds:
 
-**Read the held-out column, not the headline.** Thresholds were chosen while looking at
-the first six screens, so Decider has effectively seen them. The four adversarial screens
-in `hard_screens.py` were written afterwards to break the rubric, and nothing was tuned
-in response. Ten synthetic screens is a small set either way.
+**The dangerous kind.** Both Nova models **let the contacts screen through** — a CRM list
+of seven people with email addresses, international phone numbers and home addresses. They
+judged it safe to send. Decider flagged all four regions of it, 0.697 to 0.835.
+
+**The annoying kind.** Both over-flagged a screen full of git SHAs, Docker digests and
+request UUIDs; Nova Pro also flagged a public revenue dashboard. Generative models see a
+long hex string and cry secret.
+
+A gate that over-flags costs you a retry. A gate that waves personal data through costs
+you an incident. Decider made neither mistake on this set.
+
+**Read the held-out column, not the headline.** Thresholds were chosen while looking at the
+first six screens, so Decider has effectively seen them. The six in `hard_screens.py` were
+written afterwards — four to provoke false positives, two to cover rules that had shipped
+with no test image at all — and nothing was tuned in response. Twelve synthetic screens is
+still a small set.
 
 ---
 

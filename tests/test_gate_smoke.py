@@ -36,6 +36,10 @@ EXPECTED = {
     "dm": Verdict.WITHHOLD,          # ditto
     "terminal_error": Verdict.PASS,  # a stack trace, nothing private
     "docs": Verdict.PASS,            # public documentation
+    # One screen per rule, so a rule cannot quietly stop working. These two were added
+    # after the rules shipped untested; see research/README.md section 9.
+    "id_card": Verdict.WITHHOLD,     # identity_document: licence, portrait, DOB
+    "contacts": Verdict.REDACT,      # personal_contact: emails, phones, addresses
 }
 
 

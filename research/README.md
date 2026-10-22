@@ -211,3 +211,64 @@ draft of every document here:
 
 not the other way round. A deterministic lane you cannot measure is an assumption, and
 this one was wrong on the first real data it met.
+
+---
+
+## 9. Two rules that shipped with no evidence behind them
+
+Asked directly whether every rule had been tested, the answer was no. Of the five rules
+the README advertised, two had **never been run against a single image**:
+
+| Rule | Coverage before | Coverage now |
+|---|---|---|
+| `credential` | ide_env, deploy_failure, and two real screenshots | 0.824 - 0.926 |
+| `private_conversation` | dm.png | 0.916 |
+| `financial_records` | bank.png | 0.837 |
+| `identity_document` | **none** | see below |
+| `personal_contact` | **none** | see below |
+
+Writing a rule and advertising it without testing it is worse than omitting it, because a
+reader trusts the list. Two screens were drawn to close the gap.
+
+### `identity_document` -- id_card.png
+
+A driving-licence layout: portrait, surname, given names, date of birth, document number.
+
+```
+identity_document    0.767   -> WITHHOLD
+private_conversation 0.048
+financial_records    0.078
+verdict: 0 of 4 regions sent, 100% kept local
+```
+
+**It fired, and that was not the expected result.** The rule asks about "a photograph of a
+person's face", and the portrait here is PIL ellipses -- a cartoon, not a photograph. The
+prediction was that this test would be inconclusive. Instead it answered 0.767, which
+suggests the signal is coming from the *document layout* as much as the face. A real
+photograph has not been tested, so "works on photographs" remains unproven.
+
+### `personal_contact` -- contacts.png
+
+A CRM list: seven people, with email addresses, international phone numbers and home
+addresses.
+
+```
+personal_contact  tile 0  0.835
+                  tile 1  0.697
+                  tile 2  0.792
+                  tile 3  0.726
+verdict: REDACT, all four regions flagged, 100% kept local
+```
+
+Fired on every region, which is correct for this screen -- contact details are spread
+across all of it. Note the threshold is 0.60 and the weakest region scored 0.697, so the
+margin is thinner here than for `credential` (0.824-0.926). A screen with a single email
+address in one corner would be a better test of the lower bound, and has not been run.
+
+### What is still not covered
+
+- A **real photograph** of a face, as opposed to a drawing.
+- A screen with **one** contact detail rather than twenty-eight, to find where the rule
+  stops firing.
+- Credit card numbers, national ID numbers, and medical records: no rule exists for any of
+  them. They are listed as gaps in the README rather than implied to work.
