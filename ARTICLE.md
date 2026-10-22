@@ -88,11 +88,36 @@ Here is the same decision drawn back onto the screen it was about:
 Green regions went to Bedrock and you can read them. Region 1 was withheld at
 `credential 0.82` and its content is gone.
 
-A small confession about that picture. The first version of the renderer only *dimmed*
-the withheld regions, so the diagram explaining my redaction tool displayed the AWS keys
-it was claiming to protect, perfectly legible. Had I run it on a real screenshot and
-pasted it into this article, the explain mode would have been the leak. Withheld regions
-are now blurred and washed until no glyph survives.
+A confession about that picture, and I think it's the most useful thing in this article.
+
+The first version of that renderer only **dimmed** the withheld regions. Dim is still
+readable. So the diagram built to explain my redaction tool displayed the credentials it
+was claiming to protect:
+
+![The bug and the fix](evalset/out/_bug_before_after.png)
+
+On the left, region 1 is labelled `WITHHELD` and you can read every line of it. Had I run
+that on a real screenshot and pasted it into this article, the explain mode would have
+*been* the leak. I built a tool to stop secrets escaping and then built a picture of it
+that let them out.
+
+The fix blurs each withheld region at a radius scaled to its size, then washes it to 72%
+dark. I didn't want to take my own word for it, so I measured it with the OCR engine:
+
+| | Original screenshot | Annotated view |
+|---|---|---|
+| Text runs recovered | 11 | 0 |
+| Characters | 277 | 0 |
+| Secret patterns matched | **`aws_access_key_id`** | **none** |
+
+The only text recoverable from the annotated version is the renderer's own labels —
+`REGION 1 WITHHELD - credential`, `credential0.82`. Nothing of the screen underneath.
+
+There's a test pinning it now, and it's deliberately adversarial: it runs OCR over the
+withheld region and asserts no secret pattern can be matched, with a control test
+asserting the *original* region does leak a detectable key so the main assertion can't
+pass vacuously. A test asserting "did we call GaussianBlur" would have kept passing while
+the property it protects quietly broke.
 
 Look closely at which regions went, because they went for two different reasons.
 **Region 1** was held back for *safety* — the credentials pane. **Region 3** was skipped
