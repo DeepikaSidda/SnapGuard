@@ -13,10 +13,16 @@ venv/
 # Logs from installs and spikes
 *.log
 
-# Generated eval screens. They are reproducible:
-#   python evalset/screens.py && python evalset/hard_screens.py
-# Kept out of git so nobody mistakes a drawn screenshot for a real one.
-evalset/out/
+# The eval screens and the annotated figures ARE committed. They are every one of them
+# drawn by evalset/screens.py and evalset/hard_screens.py, so they are reproducible --
+# but a judge cloning this repo should be able to see what the benchmark was measured
+# against without running anything first. evalset/out/NOTES.md states plainly that they
+# are synthetic.
+#
+# Scratch output from a local run is not committed.
+evalset/out/_scratch*
+evalset/out/*.redacted.png
+evalset/out/_verify_*
 
 # Benchmark output is committed on purpose -- it is evidence. Uncomment to exclude.
 # evalset/results.json
