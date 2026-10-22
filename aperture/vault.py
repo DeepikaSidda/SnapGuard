@@ -37,7 +37,28 @@ from typing import Sequence
 
 from PIL import Image
 
-DEFAULT_DIRECTORY = Path.home() / ".aperture" / "quarantine"
+def default_directory() -> Path:
+    """Where blocked captures go unless told otherwise.
+
+    `APERTURE_VAULT` overrides it, so a path can be set once in the environment rather
+    than typed on every invocation.
+
+    The default deliberately sits under the home directory and not in Pictures,
+    Documents or Desktop. On the machine this was built on, Pictures is redirected into
+    OneDrive -- a quarantine full of unencrypted credentials inside a cloud-sync root
+    would upload every blocked secret, which is precisely the thing this tool exists to
+    prevent. `_warn_if_synced` catches that case wherever the folder ends up.
+    """
+    override = os.environ.get("APERTURE_VAULT")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".aperture" / "quarantine"
+
+
+# Kept as a module attribute because callers import it, but resolve through
+# `default_directory()` so the environment variable is honoured at call time rather
+# than at import time.
+DEFAULT_DIRECTORY = default_directory()
 
 # Keep this many captures, newest first. Chosen to be useful for a working day without
 # quietly becoming an archive of every secret you have ever had on screen.
@@ -117,7 +138,7 @@ class Vault:
         keep: int = DEFAULT_KEEP,
         max_age_days: int = DEFAULT_MAX_AGE_DAYS,
     ) -> None:
-        self.directory = Path(directory) if directory else DEFAULT_DIRECTORY
+        self.directory = Path(directory) if directory else default_directory()
         self.keep = keep
         self.max_age_days = max_age_days
         self.warnings: list[str] = []
