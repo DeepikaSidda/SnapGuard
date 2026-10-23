@@ -76,8 +76,36 @@ CONTEXT_RULES: tuple[Rule, ...] = (
             true="monetary amounts belonging to a person or company are visible",
             false="no personal financial information is shown",
         ),
-        # Measured 0.817 on the banking screen, <=0.073 elsewhere.
-        threshold=0.55,
+        # 0.70, and this is the second threshold here to be derived rather than guessed.
+        #
+        # It started at 0.55, set from one positive: 0.817 on the banking screen against
+        # <=0.073 on the four others. A gap that wide makes any line through the middle
+        # look safe. Then the eval set grew and `public_metrics` -- a public revenue
+        # dashboard, correctly a 'send' -- answered 0.530. Still under the line, but by
+        # two hundredths, and research/README.md section 12 recorded it as "the next
+        # threshold worth deriving rather than guessing".
+        #
+        # It then fired for real. A user screenshotted a hackathon page to test that the
+        # API key on it would be covered. The page carries a "Free plan" badge, a
+        # "Monthly allowance" progress bar, "0 of 2,000 answers used" and a row of
+        # large-number cards -- the visual grammar of a billing dashboard, with no money
+        # anywhere on it. It answered 0.599, fired, and WITHHOLD outranks REDACT, so the
+        # whole frame was refused and the credential rule's correct 0.795 was discarded.
+        #
+        #     bank statement           0.817   yes
+        #     hackathon quota page     0.599   no     <- fired at 0.55
+        #     public metrics dashboard 0.530   no
+        #
+        # 0.70 separates all three with ~0.10 either side. Stated plainly: one positive
+        # and two negatives is thin evidence for a threshold, and the honest fix is more
+        # labelled positives, which has not been done. But 0.55 is now known to be wrong
+        # in the direction that destroys a screenshot, and 0.70 is wrong in no direction
+        # yet measured.
+        #
+        # The failure mode this leaves is a bank page answering between 0.55 and 0.70,
+        # which would now pass this rule. It is not unguarded: a statement also carries
+        # account numbers, and `private_conversation` and the region rules still run.
+        threshold=0.70,
         on_match=Verdict.WITHHOLD,
         describes="account balances or financial records are on screen",
     ),
@@ -90,6 +118,16 @@ CONTEXT_RULES: tuple[Rule, ...] = (
             false="no identity document or face is visible",
         ),
         threshold=0.55,
+        # WITHHOLD, and correctly so when the screen *is* the document. A user tested a
+        # PAN card and asked, reasonably, why it did not just cover the card number.
+        # Because covering the number protects nothing: the same card carries the name,
+        # the father's name, the date of birth, a face photograph, a signature and a QR
+        # code that encodes the number. A redaction that leaves the QR code has
+        # published the number. There is no clean part of an ID card.
+        #
+        # The case where that reasoning does NOT hold is an ID occupying one corner of a
+        # large screen, and this whole-frame rule used to condemn those too. See
+        # `identity_region` in REGION_RULES.
         on_match=Verdict.WITHHOLD,
         describes="an identity document or a person's face is on screen",
     ),

@@ -54,8 +54,13 @@ def _print_result(result, image: Image.Image) -> None:
     if kind:
         print(f"  screen looks like   : {kind} "
               f"(confidence {result.info.get('screen_kind_confidence')})")
+    # Each rule's own threshold, not one hardcoded number. This said 0.55 for every
+    # rule, which was true when they all happened to be 0.55 and became a lie the moment
+    # financial_records moved to 0.70 -- the line would have reported "fired" next to a
+    # score that did not fire.
+    thresholds = {rule.name: rule.threshold for rule in CONTEXT_RULES}
     for name, value in result.context.items():
-        marker = " <-- fired" if value >= 0.55 else ""
+        marker = " <-- fired" if value >= thresholds.get(name, 0.55) else ""
         print(f"  {name:20s}: {value:.3f}{marker}")
     if result.findings:
         print("\n  findings:")

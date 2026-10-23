@@ -62,21 +62,36 @@ Box = tuple[int, int, int, int]
 # enough that a flagged region yields tens of boxes and not thousands.
 DEFAULT_CELL = 14
 
-# A cell counts as inked above EITHER of these. Two measures rather than one because
-# they fail differently: standard deviation catches texture and dense glyphs, peak-to-
-# peak catches a single thin stroke on a flat background, which barely moves the
-# deviation of a 14x14 patch. Calibrated against measured screenshots:
+# A cell counts as inked above EITHER of these.
 #
-#   flat editor background      std 0.0-0.4   ptp  0-2
-#   subtle panel gradient       std 0.9-2.1   ptp  3-9
-#   one grey sidebar glyph      std 7.2       ptp 71
-#   body text                   std 20-60     ptp 90-200
+# The measure is the steepest step between NEIGHBOURING pixels in the cell, not the
+# spread of its values. That distinction is the whole thing, and the first version got it
+# wrong: it used standard deviation and peak-to-peak, which worked on the dark editor
+# screenshots it was built against and then did nothing at all on the first light-themed
+# web page a user tested. Soft card shadows, 1px grey borders and a cream-on-white panel
+# move the spread of a cell well past any floor low enough to catch grey text, so nearly
+# every cell read as inked, the dense-region ceiling tripped, and the mesh fell back to
+# painting whole rectangles. 24% of their screen, which is what they had complained
+# about in the first place.
 #
-# The thresholds sit in the gap, close to the background end, because the cost of a
-# false positive here is 196 extra covered pixels and the cost of a false negative is a
-# legible character.
-STD_FLOOR = 3.0
-PTP_FLOOR = 24.0
+# A gradient separates them because the thing that makes text legible is a sharp edge:
+#
+#   flat background                       step  0-1
+#   soft shadow under a card              step  0-3    (10 levels spread over 40px)
+#   cream panel on a white page           step  0-2
+#   1px grey border                       step 40-70
+#   antialiased body text                 step 90-200
+#
+# Nothing a human can read has a shallow gradient, and nothing with a shallow gradient
+# needs covering. A border lights up its own cells and no more, which is correct: it is
+# content, it is just thin.
+#
+# The peak-to-peak floor stays as a second measure with a high floor, for anything with
+# strong contrast that somehow has no steep step. Thresholds sit near the background end
+# of each gap: a false positive here costs 196 extra covered pixels and a false negative
+# costs a legible character.
+GRADIENT_FLOOR = 30.0
+PTP_FLOOR = 70.0
 
 # Above this inked fraction, the mesh is not buying anything and the region is painted
 # whole: tidier to look at, and a dense region is exactly where a mesh is most likely to
@@ -112,12 +127,23 @@ def ink_mask(
         ((0, rows * cell - height), (0, columns * cell - width)),
         mode="edge",
     )
-    blocks = padded.reshape(rows, cell, columns, cell).transpose(0, 2, 1, 3)
-    flat = blocks.reshape(rows, columns, cell * cell)
+    def per_cell(plane: np.ndarray):
+        blocks = plane.reshape(rows, cell, columns, cell).transpose(0, 2, 1, 3)
+        return blocks.reshape(rows, columns, cell * cell)
 
-    std = flat.std(axis=2)
-    ptp = flat.max(axis=2) - flat.min(axis=2)
-    inked = (std >= STD_FLOOR) | (ptp >= PTP_FLOOR)
+    # Steepest step to a neighbour, horizontally or vertically, at every pixel.
+    gradient = np.zeros_like(padded)
+    np.maximum(
+        gradient[:, :-1], np.abs(np.diff(padded, axis=1)), out=gradient[:, :-1]
+    )
+    np.maximum(
+        gradient[:-1, :], np.abs(np.diff(padded, axis=0)), out=gradient[:-1, :]
+    )
+
+    values = per_cell(padded)
+    inked = (per_cell(gradient).max(axis=2) >= GRADIENT_FLOOR) | (
+        values.max(axis=2) - values.min(axis=2) >= PTP_FLOOR
+    )
 
     return _dilate(inked), rows, columns
 
