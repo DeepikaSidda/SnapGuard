@@ -73,6 +73,32 @@ def _classify(result: GateResult, tile: Tile) -> _Cell:
     return _Cell(tile, CLEARED, "SENT", rendered)
 
 
+def _check_tiles_match(result: GateResult, tiles: list[Tile]) -> None:
+    """Refuse to draw if `tiles` are not the tiles `result` is about.
+
+    This function used to trust the caller, and that was a latent leak with a very
+    unhelpful failure mode. A caller that passed a 2x2 grid alongside a result computed
+    on a 6x4 grid got an image where *nothing* was destroyed: no supplied tile matched
+    any flagged tile, so the "withhold" branch never ran, while the "paste the regions
+    that were sent" branch matched on index alone and happily restored the original
+    pixels. The output looked like a finished explain figure and had the credentials in
+    it, which is precisely the bug this module's tests exist to catch. It took a grid
+    change to surface it.
+
+    So: a mismatch is a programming error, and it raises rather than rendering.
+    """
+    supplied = {t.index: t.box for t in tiles}
+    referenced = list(result.flagged) + list(result.cleared) + list(result.illegible)
+    for tile in referenced:
+        if supplied.get(tile.index) != tile.box:
+            raise ValueError(
+                f"annotate() was given tiles that do not match the result: region "
+                f"{tile.index} is {tile.box} in the result and "
+                f"{supplied.get(tile.index)} in the tiles passed in. Build the grid "
+                f"with the same columns and rows the gate used."
+            )
+
+
 def annotate(
     image: Image.Image,
     result: GateResult,
@@ -82,14 +108,15 @@ def annotate(
     show_numbers: bool = True,
 ) -> Image.Image:
     """Return a copy of `image` with the gate's reasoning drawn over it."""
+    _check_tiles_match(result, tiles)
     base = image.convert("RGB")
 
     # Dim everything, then restore the regions that were actually sent, so the picture
     # literally shows what the cloud model got to see.
     canvas = Image.blend(base, Image.new("RGB", base.size, (10, 10, 14)), 1 - DIM)
-    sent = {t.index for t in result.injectable}
+    sent = {t.index: t.box for t in result.injectable}
     for tile in tiles:
-        if tile.index in sent:
+        if sent.get(tile.index) == tile.box:
             canvas.paste(base.crop(tile.box), tile.box[:2])
 
     # And *destroy* the regions that were withheld, rather than merely dimming them.
@@ -102,17 +129,20 @@ def annotate(
     # Blur first so the shape of the content survives -- a reader should be able to see
     # that something text-like was there -- then overlay a dark wash heavy enough that
     # no glyph can be recovered.
-    withheld_indices = {t.index for t in result.flagged}
-    if result.verdict is Verdict.WITHHOLD:
-        withheld_indices = {t.index for t in tiles}
-    for tile in tiles:
-        if tile.index not in withheld_indices:
+    # The boxes come from `result`, not from the `tiles` argument, so the destructive
+    # step cannot be skipped by passing the wrong grid. Belt as well as braces: the
+    # check above would have raised already.
+    withheld_boxes = [t.box for t in result.flagged]
+    if result.verdict in (Verdict.WITHHOLD, Verdict.UNREADABLE):
+        withheld_boxes = [(0, 0, base.width, base.height)]
+    for box in withheld_boxes:
+        region = canvas.crop(box)
+        if not region.width or not region.height:
             continue
-        region = canvas.crop(tile.box)
         radius = max(14, min(region.width, region.height) // 10)
         region = region.filter(ImageFilter.GaussianBlur(radius))
         region = Image.blend(region, Image.new("RGB", region.size, (14, 10, 12)), 0.72)
-        canvas.paste(region, tile.box[:2])
+        canvas.paste(region, box[:2])
 
     d = ImageDraw.Draw(canvas, "RGBA")
     scale = max(1.0, base.width / 1600)

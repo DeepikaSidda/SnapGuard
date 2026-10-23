@@ -41,6 +41,7 @@ from .decider import Decider
 from .notify import Notifier
 from .patterns import Policy, RegionGate, Verdict
 from .questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND
+from .mesh import tighten_all
 from .redact import hold_placeholder, redact, resolve_boxes
 from .scanner import ocr_available, scan
 from .vault import Vault
@@ -210,8 +211,9 @@ def guard_clipboard(
     *,
     decider_url: str | None = None,
     minutes: int = 0,
-    columns: int = 2,
-    rows: int = 2,
+    mesh: bool = True,
+    columns: int = 6,
+    rows: int = 4,
     mode: str = "block",
     use_ocr: bool = True,
     notify: bool = True,
@@ -320,12 +322,13 @@ def guard_clipboard(
 
             # 5. Put back whatever is safe, and say what happened.
             #
-            # Precise boxes from the scanner REPLACE the tile the model flagged, rather
-            # than being added to it. Blacking out both destroyed a quarter of the
-            # screen to hide four characters.
-            boxes, narrowed = resolve_boxes(result.boxes(), hints)
-            if narrowed:
-                stamped(f"narrowed {narrowed} flagged region(s) to exact locations")
+            # The scanner's exact boxes are added to the regions the model flagged, not
+            # substituted for them: a regex hit proves there is *a* secret there, never
+            # that it is the only one. Letting it shrink the region was tried and left
+            # three credentials legible. See `redact.resolve_boxes`.
+            boxes, confirmed = resolve_boxes(result.boxes(), hints)
+            if confirmed:
+                stamped(f"regex confirmed a secret inside {confirmed} flagged region(s)")
             found = [s for s in tally.secrets[-len(hints):]] if hints else []
             if result.verdict is Verdict.WITHHOLD or result.verdict is Verdict.UNREADABLE:
                 tally.withheld += 1
@@ -363,11 +366,20 @@ def guard_clipboard(
                 )
             elif boxes:
                 tally.redacted += 1
-                redaction = redact(image, boxes, mode=mode)  # type: ignore[arg-type]
+                # The mesh. A flagged region keeps its verdict, but only the squares of
+                # it that are not blank get painted -- so hiding one line of credentials
+                # in an editor pane costs a bar, not the pane. Pixel arithmetic, no
+                # model call, and it makes no guess about which text is sensitive, which
+                # is what separates it from the regex-narrowing that was reverted.
+                meshed, shrunk = tighten_all(image, boxes, enabled=mesh)
+                if shrunk < 1.0:
+                    stamped(f"mesh      kept {shrunk:.0%} of the flagged area, "
+                            f"{len(boxes)} region(s) -> {len(meshed)} boxes")
+                redaction = redact(image, meshed, mode=mode)  # type: ignore[arg-type]
                 clipboard.set_image(redaction.image)
                 ignore.add(_fingerprint(redaction.image))
                 covered = redaction.fraction_of(image)
-                stamped(f"REDACTED  {redaction.count} region(s), {covered:.0%} of the frame")
+                stamped(f"REDACTED  {redaction.count} box(es), {covered:.0%} of the frame")
 
                 kept = None
                 if vault:
@@ -479,8 +491,9 @@ def guard_folders(
     directories: Sequence[Path] | None = None,
     decider_url: str | None = None,
     minutes: int = 0,
-    columns: int = 2,
-    rows: int = 2,
+    mesh: bool = True,
+    columns: int = 6,
+    rows: int = 4,
     mode: str = "block",
     use_ocr: bool = True,
     replace: bool = False,
@@ -594,12 +607,16 @@ def guard_folders(
                     for finding in result.findings:
                         stamped(f"decider {finding}")
 
-                    boxes, narrowed = resolve_boxes(result.boxes(), hints)
+                    boxes, _confirmed = resolve_boxes(result.boxes(), hints)
                     if result.verdict in (Verdict.WITHHOLD, Verdict.UNREADABLE):
                         boxes = [(0, 0, image.width, image.height)]
                         tally.withheld += 1
                     elif boxes:
                         tally.redacted += 1
+                        # Keep the regions, drop their blank parts. See mesh.py.
+                        boxes, shrunk = tighten_all(image, boxes, enabled=mesh)
+                        if shrunk < 1.0:
+                            stamped(f"mesh      kept {shrunk:.0%} of the flagged area")
                     else:
                         tally.passed += 1
                         stamped(f"PASSED    {path.name}, left untouched")
@@ -620,7 +637,7 @@ def guard_folders(
 
                     verb = "WITHHELD" if result.verdict is Verdict.WITHHOLD else "REDACTED"
                     covered = redaction.fraction_of(image)
-                    stamped(f"{verb}  {redaction.count} region(s), "
+                    stamped(f"{verb}  {redaction.count} box(es), "
                             f"{covered:.0%} of the frame -> {target}")
                     notifier.verdict(
                         kind="withhold" if verb == "WITHHELD" else "redact",

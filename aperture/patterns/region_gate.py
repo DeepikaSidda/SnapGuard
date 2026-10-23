@@ -270,10 +270,26 @@ class RegionGate:
         # 0.505 to 0.548, so 0.25 separates them with wide margin on both sides, where
         # the rule's own 0.50 threshold left 0.005.
         coarse_clear_below: float = 0.25,
-        # Subdivide a flagged region and re-ask, to narrow the box from a quarter of the
-        # screen to a sixteenth. Only flagged regions are refined, so a clean screen
-        # costs nothing extra.
-        refine_flagged: bool = True,
+        # Off by default, and it used to be on. Subdividing a flagged region and
+        # re-asking was the first answer to "the redaction covers too much of my
+        # screen", and it worked -- 56% of the reported frame down to 24%. Then the grid
+        # itself went from 2x2 to 6x4, which gets to 15% on its own, and refinement
+        # stopped paying for itself:
+        #
+        #   6x4            15% covered   11 calls
+        #   4x4            22% covered    9 calls
+        #   4x4 + refine   19% covered   21 calls
+        #
+        # Three points of coverage for 2.3x the local requests, on a good case. On a bad
+        # case it is far worse than 2.3x, because cost scales with how much fired: a
+        # screen that is sensitive everywhere flags most of 24 regions and then pays four
+        # more requests for each one. One such screen in the eval set ran for thirteen
+        # minutes before this was turned off.
+        #
+        # Kept, because it is the right tool on a large display where even a 6x4 region
+        # is big, and exposed as `aperture --precise`. The lesson is the ordering: make
+        # the regions small first, and only then narrow the ones that fire.
+        refine_flagged: bool = False,
         # How many times to quarter a flagged region. Each level cuts the covered area
         # by up to four and costs up to four more requests, but only on regions that
         # actually fired. 2 takes a quarter-screen region down to a sixty-fourth of the
@@ -287,8 +303,11 @@ class RegionGate:
         # sub-regions survive the 448px downscale better.
         refine_columns: int = 2,
         refine_rows: int = 2,
-        # Stop subdividing below this; the detail is already past what the server's
-        # 448px downscale preserves, so the model would be judging a smear.
+        # Do not produce sub-regions smaller than this. Checked against the size of the
+        # pieces a subdivision *would* make, not the region being subdivided -- asking
+        # the model about a 90x76 crop and then recording a verdict on the answer is
+        # exactly the mistake this is meant to prevent. It is what makes the refinement
+        # pass self-limiting across display sizes.
         refine_min_side: int = 150,
         # Scored alongside the sensitivity rules when `inspect` is given a question.
         # A factory rather than a Rule, because the question has to quote what the user
@@ -297,12 +316,16 @@ class RegionGate:
         # Asked per region so a verdict is never recorded about an unreadable smear.
         # `looks_blank` catches a solid colour cheaply; this catches the subtler case.
         legibility: Rule | None = None,
-        # 2x2 by default. The grid is a straight trade: a 3x3 grid of a 1920x1080 screen
-        # preserves more detail (tiles downscale 1.4x rather than 2.1x) but costs more
-        # requests, and on CPU each request is ~12 s. 2x2 lets the coarse pass screen
-        # the entire frame in a single request, so a clean screen costs two calls.
-        columns: int = 2,
-        rows: int = 2,
+        # 6x4, wider than tall because screens are. This started at 2x2 -- which lets
+        # the coarse pass screen a whole frame in one request -- and a user reported,
+        # three times, that the redaction covered too much. They were right, and their
+        # own diagnosis was the fix: use small regions rather than large ones and then
+        # try to narrow them. A 6x4 grid of a 1080p screen gives 320x270 tiles, which
+        # the server does not downscale at all, and makes one hit 4% of the display
+        # instead of 25%. Measured: 15% of the reported screen covered against 24% for
+        # 2x2-plus-refinement, at the same 11 local requests. See tiling.py.
+        columns: int = 6,
+        rows: int = 4,
         state: str = "A region of a screen captured on a computer.",
         context_state: str = "A screenshot of an application window on a computer.",
         # Full resolution, and it stays that way. Two attempts to shrink images for
@@ -491,15 +514,18 @@ class RegionGate:
     ) -> None:
         """Subdivide a flagged region and find out which part of it fired.
 
-        A 2x2 grid of a 1080p screen makes each region a quarter of the display. Black
-        one out to hide a line of text and you have destroyed a file tree, an editor
-        pane and a lot of empty space -- which is exactly what a user reported.
+        The gate used a 2x2 grid, which makes each region a quarter of the display.
+        Black one out to hide a line of text and you have destroyed a file tree, an
+        editor pane and a lot of empty space -- which is exactly what a user reported.
 
         The wrong fix is to trust the deterministic scanner's precise box and cover only
         that: tried, and it left three credentials legible, because the scanner matched
         one secret of four. See `redact.resolve_boxes`.
 
-        The right fix is to ask the model again, smaller. Subdivide the flagged region
+        The real fix was the grid itself, and the user said so: small regions beat large
+        regions that are narrowed afterwards. The default is 6x4 now. This pass remains
+        for the case the grid cannot cover, a region that is large because the display
+        is -- ask the model again, smaller. Subdivide the flagged region
         and re-test only the rules that actually fired. Sub-regions that fire give a box
         four times tighter; if none fire, the signal was diffuse and the whole region is
         kept. Cost is bounded because only flagged regions are ever refined, and most
@@ -534,13 +560,17 @@ class RegionGate:
 
         Recursion stops when the model stops localising -- if every sub-region fires, or
         none does, the signal is diffuse and the parent box is the honest answer. It also
-        stops when a sub-region gets too small to survive the 448px downscale, since
-        below that the model is being asked about a smear.
+        stops before making sub-regions too small to survive the 448px downscale, since
+        below that the model is being asked about a smear. Note that the size test is on
+        the pieces this call would create, not on the region it was handed: testing the
+        parent lets through exactly one round of questions about smears, which at the
+        6x4 default grid is every round.
         """
         left, top = offset_box[0], offset_box[1]
         width, height = image.size
+        piece_side = min(width / self.refine_columns, height / self.refine_rows)
 
-        if depth <= 0 or min(width, height) < self.refine_min_side:
+        if depth <= 0 or piece_side < self.refine_min_side:
             return [offset_box]
 
         questions = {r.name: r.question for r in fired}

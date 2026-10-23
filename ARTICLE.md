@@ -359,6 +359,11 @@ Strands Decider 2B   credential = 0.900, 0.568  -> redacted 56% of the frame
 
 **Twice, the 2B model caught my real credentials and the hand-written code didn't.**
 
+(Those coverage figures are from the runs as they happened, on a 2×2 region grid. A user
+looked at the second one and said what you are probably thinking — 56% of my screen gone
+to hide one line. That took three rounds to fix properly and the default grid is 6×4 now,
+which puts the same captures around 15%. The story is further down.)
+
 I still don't know exactly why. Either the OCR is mangling characters at that font size,
 or my keys sit in a format none of my thirteen patterns cover. Either way the lesson is
 the same, and it isn't the one I set out to write: the deterministic lane is a useful

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-23T12:39:17",
+  "generated": "2026-10-23T14:41:53",
   "ground_truth": {
     "ide_env": "hold",
     "bank": "hold",
@@ -18,7 +18,7 @@
     {
       "name": "Strands Decider 2B (local, CPU)",
       "accuracy": 1.0,
-      "median_ms": 132284.7,
+      "median_ms": 191576.2,
       "total_cost_usd": 0.0,
       "missed_holds": [],
       "false_holds": [],
@@ -27,121 +27,121 @@
           "screen": "ide_env",
           "truth": "hold",
           "predicted": "hold",
-          "latency_ms": 199101.28250000707,
+          "latency_ms": 188240.65219999466,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "redact; 10 calls; a credential or secret value is visible in part of the screen"
+          "detail": "redact; 12 calls; a credential or secret value is visible in part of the screen"
         },
         {
           "screen": "bank",
           "truth": "hold",
           "predicted": "hold",
-          "latency_ms": 84295.9009000042,
+          "latency_ms": 158844.09700000833,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "withhold; 2 calls; account balances or financial records are on screen"
+          "detail": "withhold; 7 calls; account balances or financial records are on screen"
         },
         {
           "screen": "dm",
           "truth": "hold",
           "predicted": "hold",
-          "latency_ms": 87372.35669999791,
+          "latency_ms": 175729.52170000644,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "withhold; 2 calls; a private conversation between named people is on screen"
+          "detail": "withhold; 7 calls; a private conversation between named people is on screen"
         },
         {
           "screen": "deploy_failure",
           "truth": "hold",
           "predicted": "hold",
-          "latency_ms": 145593.07600000466,
+          "latency_ms": 237162.4112999998,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "redact; 6 calls; a credential or secret value is visible in part of the screen; region 1 narrowed to 2 box(es), 56% of the region"
+          "detail": "redact; 11 calls; a credential or secret value is visible in part of the screen; coarse screen returned 0.635 for a batch of 4; examined each region individually"
         },
         {
           "screen": "terminal_error",
           "truth": "send",
           "predicted": "send",
-          "latency_ms": 150445.73000000673,
+          "latency_ms": 194911.70740000962,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "pass; 2 calls; nothing fired"
+          "detail": "pass; 7 calls; nothing fired"
         },
         {
           "screen": "docs",
           "truth": "send",
           "predicted": "send",
-          "latency_ms": 119266.91399999254,
+          "latency_ms": 217146.19749999838,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "pass; 2 calls; nothing fired"
+          "detail": "pass; 7 calls; nothing fired"
         },
         {
           "screen": "sha_soup",
           "truth": "send",
           "predicted": "send",
-          "latency_ms": 78746.34490000608,
+          "latency_ms": 232929.32389999623,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "pass; 2 calls; nothing fired"
+          "detail": "pass; 7 calls; nothing fired"
         },
         {
           "screen": "public_metrics",
           "truth": "send",
           "predicted": "send",
-          "latency_ms": 83675.48190000525,
+          "latency_ms": 205735.04919999687,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "pass; 2 calls; nothing fired"
+          "detail": "pass; 7 calls; nothing fired"
         },
         {
           "screen": "dark_editor",
           "truth": "send",
           "predicted": "send",
-          "latency_ms": 78051.1855000077,
+          "latency_ms": 185035.62650000094,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "pass; 2 calls; nothing fired"
+          "detail": "pass; 7 calls; nothing fired"
         },
         {
           "screen": "token_in_url",
           "truth": "hold",
           "predicted": "hold",
-          "latency_ms": 145302.39670000446,
+          "latency_ms": 171830.23839999805,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "withhold; 7 calls; account balances or financial records are on screen; a credential or secret value is visible in part of the screen; region 0 narrowed to 1 box(es), 28% of the region"
+          "detail": "withhold; 9 calls; account balances or financial records are on screen; a credential or secret value is visible in part of the screen"
         },
         {
           "screen": "id_card",
           "truth": "hold",
           "predicted": "hold",
-          "latency_ms": 231398.50840000145,
+          "latency_ms": 180123.9646999893,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "withhold; 2 calls; an identity document or a person's face is on screen"
+          "detail": "withhold; 7 calls; an identity document or a person's face is on screen"
         },
         {
           "screen": "contacts",
           "truth": "hold",
           "predicted": "hold",
-          "latency_ms": 342871.23540000175,
+          "latency_ms": 401845.42519999377,
           "tokens_in": 0,
           "tokens_out": 0,
           "cost_usd": 0.0,
-          "detail": "redact; 18 calls; a person's contact details are visible in part of the screen; coarse screen returned 0.823 for a batch of 4; examined each region individually; region 0 narrowed to 3 box(es), 84% of the region; region 1 narrowed to 2 box(es), 56% of the region; region 2 narrowed to 2 box(es), 56% of the region; region 3 narrowed to 1 box(es), 28% of the region"
+          "detail": "redact; 19 calls; a person's contact details are visible in part of the screen; coarse screen returned 0.891 for a batch of 4; examined each region individually; coarse screen returned 0.661 for a batch of 4; examined each region individually; coarse screen returned 0.810 for a batch of 4; examined each region individually"
         }
       ]
     }

@@ -50,12 +50,34 @@ def _is_annotation(text: str) -> bool:
     if not tokens:
         return True
     for token in tokens:
-        # Scores read back as 'credential0.82' once OCR drops the space.
-        stripped = token.rstrip("0123456789.")
+        # Scores read back as 'credential0.82' once OCR drops the space, and a caption
+        # clipped by the region boundary comes back with the partial glyph attached:
+        # 'credential' -> 'cre('. Strip anything that is not a letter from both ends.
+        stripped = token.strip("0123456789.,:;_()[]{}|/\\<>'\"")
         if stripped in ANNOTATION_WORDS or token.replace(".", "").isdigit():
+            continue
+        # Then treat a prefix of one of our own words as one of our own words: 'cre' is
+        # not recoverable screen content by any reading.
+        if len(stripped) >= 2 and any(w.startswith(stripped) for w in ANNOTATION_WORDS):
             continue
         return False
     return True
+
+
+def _keep_only(image: Image.Image, boxes) -> Image.Image:
+    """A copy of `image` with everything outside `boxes` blanked out.
+
+    Cropping each region separately and OCR-ing the crops reads the withheld area, but
+    it also chops every line of text at the region seam -- and at a 6x4 grid a line of
+    credentials spans three regions, so no crop contains a whole key and the pattern
+    scanner has nothing to match. Blanking the surroundings instead keeps the withheld
+    text intact and still reads nothing but the withheld text.
+    """
+    out = Image.new("RGB", image.size, (0, 0, 0))
+    source = image.convert("RGB")
+    for box in boxes:
+        out.paste(source.crop(box), box[:2])
+    return out
 
 
 @pytest.fixture(scope="module")
@@ -80,38 +102,52 @@ def annotated():
     assert result.verdict is Verdict.REDACT, "the fixture screen should be redacted"
     assert result.flagged, "something should have been flagged to withhold"
 
-    tiles = tile_grid(image, columns=2, rows=2)
+    # The gate's own grid, not a hardcoded one. This test used to build a 2x2 grid by
+    # hand; when the default became 6x4 the two stopped corresponding and `annotate`
+    # rendered an image with nothing destroyed in it. `annotate` now refuses a mismatch
+    # (see test_a_mismatched_grid_is_refused), and the right grid here is whatever the
+    # gate used.
+    tiles = tile_grid(image, columns=gate.columns, rows=gate.rows)
     return image, annotate(image, result, tiles), result, tiles
 
 
 def test_the_original_really_does_leak(annotated):
     """Control. If the source image has no detectable secret, the test below is vacuous."""
-    image, _, result, tiles = annotated
-    box = result.flagged[0].box
-    text = " ".join(t for t, _ in read_text_boxes(image.crop(box)))
+    image, _, result, _ = annotated
+    visible = _keep_only(image, [t.box for t in result.flagged])
+    text = " ".join(t for t, _ in read_text_boxes(visible))
     assert scan_text(text), (
-        "no secret pattern found in the original withheld region, so this test cannot "
-        "demonstrate anything"
+        "no secret pattern found in the original withheld regions, so this test cannot "
+        f"demonstrate anything. read back: {text[:200]!r}"
     )
 
 
 def test_no_secret_survives_in_the_annotated_view(annotated):
     """The property that matters: the explain image must not carry the secret."""
-    _, shown, result, tiles = annotated
-    box = result.flagged[0].box
-    recovered = " ".join(t for t, _ in read_text_boxes(shown.crop(box)))
-    matched = scan_text(recovered)
+    _, shown, result, _ = annotated
+    visible = _keep_only(shown, [t.box for t in result.flagged])
+    matched = scan_text(" ".join(t for t, _ in read_text_boxes(visible)))
     assert not matched, f"the annotated view still leaks: {matched}"
 
 
 def test_only_our_own_labels_are_recoverable(annotated):
     """Nothing of the underlying screen should come back, labels aside."""
-    _, shown, result, tiles = annotated
-    box = result.flagged[0].box
-    leaked = [
-        text
-        for text, _ in read_text_boxes(shown.crop(box))
-        if not _is_annotation(text)
-    ]
+    _, shown, result, _ = annotated
+    visible = _keep_only(shown, [t.box for t in result.flagged])
+    leaked = [t for t, _ in read_text_boxes(visible) if not _is_annotation(t)]
     print(f"\n  recoverable non-label text: {leaked or 'none'}")
     assert not leaked, f"screen content recovered from a withheld region: {leaked}"
+
+
+def test_a_mismatched_grid_is_refused(annotated):
+    """The bug that a grid change surfaced: tiles that are not the result's tiles.
+
+    Passing them produced an explain figure in which the withheld branch never matched
+    anything, so the credentials were rendered in full. Drawing nothing is not an
+    acceptable response to an inconsistent argument when the thing being drawn is a
+    redaction.
+    """
+    image, _, result, _ = annotated
+    wrong = tile_grid(image, columns=2, rows=2)
+    with pytest.raises(ValueError, match="do not match"):
+        annotate(image, result, wrong)

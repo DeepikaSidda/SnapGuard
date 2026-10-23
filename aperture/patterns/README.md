@@ -193,7 +193,18 @@ and small text is gone:
 | Control crop: code, no secret | **0.186** |
 
 Hence the grid. A 2×2 grid of a 1080p screen gives regions that downscale 2.1× instead of
-4.3×, and a 3×3 gets you to 1.4×.
+4.3×. The default is **6×4**, which gives 320×270 regions — already inside 448px, so
+**nothing is downscaled at all.** Past roughly 3×3 the grid stops being a cost/accuracy
+trade and becomes free accuracy.
+
+6 columns by 4 rows rather than a square grid because screens are 16:9, and the 448px cap
+applies to the long side: square-ish regions spend the budget on detail, letterbox strips
+spend it on width.
+
+The other reason to go fine is the redaction. A region is the unit that gets blacked out,
+so one hit at 2×2 covers a quarter of the display and at 6×4 covers a twenty-fourth.
+A user reported the former as a bug three times before it was fixed properly —
+[`research/README.md` §13](../../research/README.md).
 
 ---
 
@@ -206,17 +217,29 @@ Hence the grid. A 2×2 grid of a 1080p screen gives regions that downscale 2.1×
 4. fine pass              1 per hot    only regions a coarse batch flagged
 ```
 
-A clean 2×2 screen costs **2 calls**. One with a problem costs 3–4. The alternative —
-one call per region — costs 5 and gets no better answer.
+Step 3 is what makes a fine grid affordable. At the 6×4 default a clean screen costs
+**7 calls** for 24 regions — 1 context plus 6 coarse batches — not 25, because the coarse
+pass asks about four regions at once and only a batch that comes back hot is split. A
+screen with one problem in it costs 11. Blank regions are dropped for free by step 1.
 
-With `asking_about`, step 3 is skipped and every region gets a fine pass, so a 2×2 screen
-costs **5 calls** — but each one carries sensitivity, relevance and legibility together.
-The marginal cost of an extra question on an image already in the request is 2.8 s against
+There is a fifth, optional step: `refine_flagged` subdivides a region that fired and asks
+again, for a tighter box. It is **off by default**. At a coarse grid it was worth a lot
+(56% of a frame covered down to 24%); at a fine grid it buys three points of coverage for
+2.3× the requests, and its cost scales with how much fired, so a screen that is sensitive
+everywhere pays four extra requests per flagged region. Make the regions small first.
+
+With `asking_about`, step 3 is skipped — relevance cannot be asked as a batched "any of
+these?" — and every non-blank region gets a fine pass. That is the expensive mode, and it
+is the agent path, which is why the agent uses a coarse 2×2 grid while the clipboard guard
+uses 6×4. Each fine call carries sensitivity, relevance and legibility together: the
+marginal cost of an extra question on an image already in the request is 2.8 s against
 9.5 s for a fresh one, so bundling is most of why this is affordable at all.
 
-Measured on an i5-1235U with no GPU: ~12s per call, so a clean screen is ~24s. On a
+Measured on an i5-1235U with no GPU: ~12s per call, so a clean 6×4 screen is ~80s. On a
 4-vCPU `c7i.xlarge` the community reports ~681ms per call, and AWS report ~115ms on an
-RTX 3090. The *ratios* are what travel; the absolute numbers are a worst case.
+RTX 3090 — which would put the same screen at under ten seconds and under three
+respectively. The *ratios* are what travel; the absolute numbers here are a worst case,
+and were measured on a machine with ~1 GB of RAM to spare.
 
 ---
 
@@ -241,6 +264,8 @@ from strands import Agent
 from strands.models import BedrockModel
 from aperture.patterns.intervention import ScreenBuffer, ScreenGate
 
+# Coarse on purpose: these regions are the crops that get sent to the cloud model, so
+# they have to stay big enough for it to read. The guard's grid is 6x4; this is not.
 buffer = ScreenBuffer(columns=2, rows=2)
 agent = Agent(
     model=BedrockModel(model_id="us.amazon.nova-2-lite-v1:0"),

@@ -542,3 +542,335 @@ it did not fire. Two hundredths from a false positive, which is uncomfortably cl
 the next threshold worth deriving rather than guessing.
 
 ![Reliability diagram](../evalset/out/_calibration.png)
+
+---
+
+## 13. The user was right about the grid
+
+A user reported the same problem three times: **the redaction covers too much of the
+screen.** Each report came with a screenshot, which is the only reason the problem got
+solved, because every aggregate number in this repository said the gate was working.
+
+The first two attempts treated it as a localisation problem — given that a region fired,
+find the part of it that matters:
+
+| Attempt | Covered on the reported screen | Outcome |
+|---|---|---|
+| Trust the regex scanner's exact box | — | **Reverted. Leaked 3 of 4 credentials.** The scanner matched one secret of four |
+| Subdivide a flagged region and re-ask (`_refine`) | 56% → 24% | Kept. The file tree survived |
+| Subdivide twice (`--precise`) | 24% → 14% | Kept as opt-in. 11 local requests → 23 |
+| Subdivide into horizontal strips instead of quadrants | 23% | No change. Discarded |
+
+The third report said, in the user's words, that it would be better to make the image
+with small boxes instead of large ones. That is a different diagnosis: not *narrow the
+region after it fires*, but *do not make the region that big in the first place*. It is
+the correct one, and it had been sitting in plain sight the whole time, because the 2x2
+default was chosen for request count and never revisited after refinement was added.
+
+### Measured
+
+`research/spike_grid.py`, on a 1024x576 editor screen with one credential line, a file
+tree, and a terminal pane worth keeping. Leak checked by OCR-ing the **redacted output**
+and running the regex scanner over whatever comes back.
+
+| Grid | Region size | Downscale | Covered | Local calls | Wall | Leak |
+|---|---|---|---|---|---|---|
+| 2x2 + refinement | 542x305 | 1.2x | 24% | 11 | 118s | none |
+| 3x3 | 361x203 | 0.8x | 26% | 7 | 75s | none |
+| 4x4 | 271x152 | 0.6x | 22% | 9 | 118s | none |
+| **6x4** | **180x152** | **0.4x** | **15%** | **11** | **180s** | **none** |
+| 4x4 + refinement | 271x152 | 0.6x | 19% | 21 | 162s | none |
+
+The wall-clock column is not a latency measurement — see the note further down — but the
+ratios within it are informative.
+
+Two things fall out of this.
+
+**A fine grid beats a coarse grid plus refinement, on both axes.** `4x4` alone covers
+less than `2x2+ref` (22% vs 24%) using fewer requests (9 vs 11). `6x4` covers a third
+less than the old default at *exactly the same* request count. Refinement was solving a
+problem that the grid should not have created.
+
+**Above 3x3 the server stops downscaling.** This is the part that was missed for weeks.
+The whole reason this project tiles the screen is section 3 — the server caps an image at
+448px on the long side, and a full 1080p frame arrives as a grey smear. A 2x2 region is
+*still* downscaled 1.2x, so even after tiling, detail was being thrown away. At 3x3 and
+beyond the downscale is at or below 1.0x and **the model sees every pixel.** The grid was
+never purely a cost/accuracy trade; past a certain fineness it is free accuracy.
+
+6x4 rather than 5x5 or 4x4 because screens are 16:9. Six columns by four rows gives
+roughly square tiles (320x270 on a 1080p display); a square grid cuts letterbox strips,
+and the 448px cap applies to the long side, so a wide strip wastes the budget on width.
+
+### Request count is not what it looks like
+
+24 regions sounds like six times the work of four. It is not, because of section 4: the
+coarse pass batches four regions per request and asks "any of these?", so 24 regions is
+**6 screening requests**, and the fine pass only runs on batches that come back hot. On
+the reported screen the whole inspection was 11 local requests — 1 context, 6 coarse, and
+4 fine on the one batch that fired. A clean screen costs 7.
+
+The wall-clock numbers above are inflated across the board: this machine was down to
+~1.2 GB free RAM with the fp32 model holding 6.96 GB resident. They are useful for
+ranking the options, not as absolute latency. Note also that `6x4` posts the slowest
+wall time of the five while making the same number of requests as the fastest — its
+requests are coarse batches of four images each, which are heavier than the single-image
+requests refinement makes.
+
+### A bug this exposed
+
+`refine_min_side` exists to stop subdividing before the sub-regions get too small to
+survive the 448px downscale — below that the model is being asked about a smear and its
+answer is recorded as a verdict anyway. The check was written against the size of the
+region being subdivided rather than the size of the pieces it would produce, which lets
+through exactly one round of questions about smears. At the old 2x2 default that round
+was rare. At 6x4 it would have been *every* round: 180x152 regions passing the 150px
+test, then the model being asked about 90x76 crops.
+
+Fixed to test the pieces, so the guard now scales with the display on its own: at 6x4 a
+1080p screen still has 320px regions worth halving, and a laptop screen does not.
+
+### And a cost blowup, which is why refinement is now off by default
+
+With the fine grid in and refinement still on, the eval set was re-run and **sat on one
+screen for thirteen minutes.** The screen was `contacts` — a CRM list where every region
+is sensitive. The arithmetic is unforgiving:
+
+```
+  1 context pass
++ 6 coarse batches          (24 regions, 4 images per request)
++ up to 24 fine requests    (one per region that the coarse pass did not clear)
++ 4 refinement requests     FOR EVERY REGION THAT FIRED
+```
+
+Refinement's cost scales with how much fired, and the table above was measured on a good
+case — one credential on an otherwise ordinary screen, where three regions of 24 fired.
+On a screen where fifteen fire, refinement alone is sixty extra requests.
+
+Weighed against what it buys at a fine grid — `4x4` 22% → `4x4+ref` 19% — that is three
+points of coverage for 2.3x the requests on a good case and far worse on a bad one. So
+refinement is **off by default** and exposed as `aperture check --precise`, for the case
+the grid genuinely cannot reach: a 4K display, where even a 6x4 region is 640px wide.
+
+The ordering is the whole lesson. Make the regions small, *then* narrow the ones that
+fire — never the other way round.
+
+### What this costs, stated plainly
+
+A 6x4 grid is more local requests than 2x2: 7 on a clean screen against 2, and 11 to 30
+on a screen with something on it. On this machine — no GPU, fp32 weights, and about
+1 GB of free RAM left over — that is **two to four minutes per screenshot** in the
+clipboard guard, against roughly one before. The guard is asynchronous, so nothing
+blocks except paste, but it is a real cost and the kind of number that gets quietly
+omitted. It is a property of the hardware rather than the design: the same 11 requests
+on a GPU are seconds.
+
+### The idea that was not built
+
+The two-level version: screen the frame as 2x2 (one request), and subdivide only the hot
+quarters into 3x2 — which produces pieces the same size as a flat 6x4 region. A clean
+screen would cost 2 requests instead of 7, and a screen with one hot quarter about 8,
+with the same small boxes. That is strictly better than both options measured here, and
+it is the same code path as refinement with a different sub-grid.
+
+It is not built, because every experiment on this machine costs minutes per screen and
+the measured, verified option was the flat grid. Written down rather than claimed.
+
+### Shipped
+
+`research/verify_grid_default.py` runs the gate the way the CLI and the clipboard guard
+construct it — no arguments, nothing pinned — on the same screen:
+
+```
+  screen        : 1024x576
+  grid          : 6x4 (24 regions of 180x152, downscale 0.4x)
+  verdict       : REDACT
+  regions fired : 3 of 24
+  covered       : 15% of the screen
+  local calls   : 11 in 126s
+  leak          : none
+  file tree kept: True
+  terminal kept : True
+```
+
+### What this is actually a lesson about
+
+Three reports, and the first two produced fixes that were measured, tested, and worse
+than the one the user suggested. The reason is that the complaint was read as "the box
+around the secret is too big" when it was "the regions are too big" — and the 2x2 grid
+was not treated as a parameter under test, because it had a comment next to it
+explaining why it was chosen. The comment was about request count. Nobody had measured
+coverage.
+
+The same shape of error as sections 10 and 11: a decision that was reasonable when made,
+documented well enough that it stopped being questioned, and never re-measured against
+the thing a user could see.
+
+### The eval set at the new default
+
+The thing a change like this can quietly break is accuracy — smaller regions mean less
+context in each one, and a rule like `private_conversation` is a judgement about a whole
+pane, not a line. Re-run after the change, 6x4 with refinement off:
+
+```
+  [ok  ] ide_env          hold  (truth hold ) 188.2s  12 calls
+  [ok  ] bank             hold  (truth hold ) 158.8s   7 calls
+  [ok  ] dm               hold  (truth hold ) 175.7s   7 calls
+  [ok  ] deploy_failure   hold  (truth hold ) 237.2s  11 calls
+  [ok  ] terminal_error   send  (truth send ) 194.9s   7 calls
+  [ok  ] docs             send  (truth send ) 217.1s   7 calls
+  [ok  ] sha_soup         send  (truth send ) 232.9s   7 calls
+  [ok  ] public_metrics   send  (truth send ) 205.7s   7 calls
+  [ok  ] dark_editor      send  (truth send ) 185.0s   7 calls
+  [ok  ] token_in_url     hold  (truth hold ) 171.8s   9 calls
+  [ok  ] id_card          hold  (truth hold ) 180.1s   7 calls
+  [ok  ] contacts         hold  (truth hold ) 401.8s  19 calls
+
+  accuracy 12/12, held-out subset 6/6, median 191.6s, $0.00
+```
+
+Screen-level accuracy held at 12/12 and the held-out subset at 6/6. Note how cleanly the
+call counts fall out of the structure: every clean screen costs exactly 7 — one context
+pass and six coarse batches, with no region ever examined individually. The screens that
+cost more are the ones where a batch came back hot.
+
+And note the median: **191.6s against roughly 60s at the old 2x2 default.** Three times
+slower per screen for a third of the covered area. On this hardware that is the trade;
+on anything with a GPU neither number is interesting.
+
+One caveat on the accuracy claim, the same one as section 12: screen-level accuracy is an
+aggregate and this project has now been bitten three times by an aggregate that was true
+and insufficient. Region-level ground truth was not re-collected at 6x4, so what is
+verified here is that no screen changed its verdict — not that every region did the
+right thing for the right reason.
+
+---
+
+## 14. The mesh: graph paper, and the thing the model was never answering
+
+The fourth report of the same complaint came with a picture of graph paper and the
+suggestion that the redaction should work like that — a fine mesh, fill in the squares
+that matter.
+
+That is right, and it cannot be done the way the previous three rounds were done. Every
+fix so far had worked on one axis: make the unit the model judges smaller.
+
+| | Covered on the reported screen |
+|---|---|
+| whole frame | 56% |
+| 2x2 grid, subdivide what fires | 24% |
+| 6x4 grid | 15% |
+
+A graph-paper mesh over a 1080p screen is several hundred squares. At ~12s per local
+decision on this CPU that road ends at an hour per screenshot, so the mesh cannot be
+something the model is asked about. Getting there meant noticing that **two different
+questions had been conflated for the whole project.**
+
+```
+  WHERE IS THERE SOMETHING SENSITIVE?      a judgement.   only the model can answer it
+  WHERE ARE THERE PIXELS?                  arithmetic.    free, exact, nothing to fool
+```
+
+Every version of this gate until now answered the first and then used the answer for the
+second. `credential 0.915 on region 3` is not a location — it says a credential is
+somewhere in region 3 — and painting the region rectangle covers every blank pixel in it
+as well. On a code pane, most of the pixels are blank.
+
+So: mesh each flagged region into 14px squares, measure each square, paint the ones that
+are not background. The claim stays exactly what the model made — *everything in this
+region goes* — it is just that the empty half of an editor pane is no longer part of
+"everything".
+
+### Why this is not the mistake that was reverted
+
+Round one of this whole saga was narrowing a flagged region to the regex scanner's
+matched box. It produced a screenshot with **three credentials still legible**, because
+the scanner had matched one secret of four. That failure is pinned by a test and the
+lesson was supposed to be "do not narrow". The mesh narrows. The difference is what the
+narrowing is based on:
+
+| | Covers |
+|---|---|
+| narrowing to a regex hit | the secrets the scanner **recognised** |
+| narrowing to inked squares | every pixel in the region that is **not background** |
+
+The first is a guess about which text is sensitive, and it was wrong on real data — two
+keys wrapped across lines, a Stripe key shorter than its pattern. The second makes no
+guess about text at all. **A secret cannot hide in blank space**, so dropping only blank
+space cannot expose one. There is no format it can be in, no line it can wrap across,
+and no font size that defeats it.
+
+That is the whole argument, and it is why this one is safe and the first one was not.
+
+### Two measures, because they fail differently
+
+A square counts as inked above either a standard-deviation floor or a peak-to-peak
+floor. Measured on real screenshots:
+
+| | std | peak-to-peak |
+|---|---|---|
+| flat editor background | 0.0–0.4 | 0–2 |
+| subtle panel gradient | 0.9–2.1 | 3–9 |
+| one grey sidebar glyph | 7.2 | 71 |
+| body text | 20–60 | 90–200 |
+
+Thresholds at 3.0 and 24.0 — in the gap, deliberately near the background end. Standard
+deviation alone misses a single thin stroke on a flat background, because one hairline
+barely moves the deviation of a 196-pixel patch; peak-to-peak catches it. Peak-to-peak
+alone is fooled by one hot pixel; deviation isn't. Each inked square is then dilated
+outward by one square, so an anti-aliased glyph edge spilling into the next cell cannot
+leave a sliver of itself showing.
+
+### Measured
+
+```
+  screen        : 1024x576
+  grid          : 6x4 (24 regions of 180x152)
+  regions fired : 3 of 24
+  regions only  : 14% of the screen (3 boxes)
+  after mesh    :  6% of the screen (4 boxes, kept 47% of the flagged area)
+  leak          : none
+  file tree kept: True
+  terminal kept : True
+```
+
+**56% → 24% → 15% → 6%**, with the credential still fully covered. The mesh costs no
+model calls and about 4ms.
+
+### Three fail-safe paths, which is the only reason this is shippable
+
+```
+  a photo, a face, a gradient     high variation everywhere -> the square is covered
+  the region is dense             above 72% inked -> paint the region whole
+  no ink found at all             paint the region whole; trust the model's judgement
+```
+
+The dense case matters more than it looks. A mesh over a region that is almost entirely
+text produces a comb of bars with hairlines of background between them, which is both
+ugly and the most likely place for an island of readable pixels to survive. Above the
+ceiling, the rectangle is the better answer.
+
+### A bug this exposed
+
+`Redaction.covered_pixels` was a sum of box areas. That was correct while a redaction was
+two or three disjoint rectangles and quietly wrong afterwards: regions overlap by 6% by
+design, so a line of text crossing a seam yields two bars that share pixels, and the mesh
+turns one region into a dozen bars. The reported coverage was inflated — on this case
+7% rather than the true 6%.
+
+Overstating is not a safe direction to be wrong in when the number exists to answer a
+user who has complained four times that too much of their screen is covered. Now computed
+as a union over a mask. It is also why `tighten_all` reports its ratio from union areas
+rather than sums.
+
+### What is still not right
+
+The bars are axis-aligned 14px squares merged into runs, so a short line of text gets a
+bar a little wider and taller than the glyphs. Tighter would mean per-glyph boxes, which
+is more boxes, more borders, and a result that looks like static. 14px is about one
+character cell, and it is a chosen trade rather than a limit.
+
+The `--explain` overlay still blurs flagged regions whole, because it is a picture of
+*region-level* decisions and meshing it would hide what the model actually said. The
+redaction and the diagram of the redaction are now deliberately different granularities,
+which is worth knowing before comparing the two images.

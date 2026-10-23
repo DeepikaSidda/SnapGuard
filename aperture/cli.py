@@ -20,6 +20,7 @@ from PIL import Image
 
 from .decider import Decider, DeciderUnavailable, VisionNotEnabled
 from .patterns import Policy, RegionGate, Verdict
+from .mesh import tighten_all
 from .questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND
 from .redact import redact, resolve_boxes
 from .scanner import ocr_available, scan
@@ -38,10 +39,11 @@ def _gate(decider: Decider, columns: int, rows: int, describe: bool = False,
         context_rules=CONTEXT_RULES,
         info_questions=SCREEN_KIND if describe else None,
         policy=Policy(fail_closed=True),
-        # Subdividing twice rather than once takes the covered area from ~24% of a
-        # screen to ~14%, and roughly doubles the number of local decisions. Measured
-        # on the reported case: 11 calls vs 23.
-        refine_depth=2 if precise else 1,
+        # --precise subdivides each flagged region and re-asks, which tightens the boxes
+        # on a large display at roughly double the local requests. The 6x4 default grid
+        # already gets the covered area to ~15%, so this is for when that is still too
+        # much -- a 4K screen, or a single line of credentials in a wide pane.
+        refine_flagged=precise,
         columns=columns,
         rows=rows,
     )
@@ -98,12 +100,20 @@ def cmd_check(args: argparse.Namespace) -> int:
     _print_result(result, image)
 
     if args.out and result.verdict in (Verdict.REDACT, Verdict.WITHHOLD):
-        boxes, narrowed = resolve_boxes(result.boxes(), hints)
+        boxes, _confirmed = resolve_boxes(result.boxes(), hints)
         if result.verdict is Verdict.WITHHOLD:
             boxes = [(0, 0, image.width, image.height)]
-        redaction = redact(image, boxes, mode=args.mode)
+            meshed, shrunk = boxes, 1.0
+        else:
+            # The mesh: keep the model's regions, drop the blank parts of them. No model
+            # call, no OCR, and no claim about which text is sensitive -- see mesh.py.
+            meshed, shrunk = tighten_all(image, boxes, enabled=args.mesh)
+        redaction = redact(image, meshed, mode=args.mode)
         redaction.image.save(args.out)
-        print(f"\n  wrote redacted copy to {args.out} "
+        if shrunk < 1.0:
+            print(f"\n  mesh kept {shrunk:.0%} of the flagged area "
+                  f"({len(boxes)} region(s) -> {len(meshed)} boxes)")
+        print(f"  wrote redacted copy to {args.out} "
               f"({redaction.fraction_of(image):.0%} of the frame covered)")
 
     # The annotated view: what the gate saw, and what it decided, drawn over the screen
@@ -205,6 +215,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
             directories=[Path(d) for d in args.dirs] if args.dirs else None,
             decider_url=args.decider_url,
             minutes=args.for_minutes,
+            mesh=args.mesh,
             columns=args.columns,
             rows=args.rows,
             mode=args.mode,
@@ -215,6 +226,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
     return guard_clipboard(
         decider_url=args.decider_url,
         minutes=args.for_minutes,
+        mesh=args.mesh,
         columns=args.columns,
         rows=args.rows,
         mode=args.mode,
@@ -318,8 +330,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--decider-url", default=None,
                         help="default http://127.0.0.1:8099")
-    parser.add_argument("--columns", type=int, default=2, help="region grid columns")
-    parser.add_argument("--rows", type=int, default=2, help="region grid rows")
+    parser.add_argument("--columns", type=int, default=6, help="region grid columns")
+    parser.add_argument("--rows", type=int, default=4, help="region grid rows")
     sub = parser.add_subparsers(dest="command", required=True)
 
     check = sub.add_parser("check", help="inspect one image")
@@ -331,13 +343,17 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--mode", choices=["block", "blur"], default="block")
     check.add_argument("--no-ocr", dest="ocr", action="store_false")
     check.add_argument("--precise", action="store_true",
-                       help="subdivide twice instead of once: covers ~14%% of the "
-                            "screen instead of ~24%%, at roughly double the local "
-                            "decisions")
+                       help="subdivide each flagged region and ask again, for tighter "
+                            "boxes on a large display, at roughly double the local "
+                            "decisions. The default grid already covers about 15%% of "
+                            "a screen")
     check.add_argument("--describe", action="store_true",
                        help="also ask what kind of screen it is. Informational only, "
                             "and it costs about 6 seconds")
-    check.set_defaults(func=cmd_check, ocr=True)
+    check.add_argument("--no-mesh", dest="mesh", action="store_false",
+                       help="paint flagged regions as whole rectangles instead of "
+                            "meshing them down to the parts that are not blank")
+    check.set_defaults(func=cmd_check, ocr=True, mesh=True)
 
     ask = sub.add_parser("ask", help="run the agent against a screen")
     ask.add_argument("question")
@@ -376,7 +392,10 @@ def build_parser() -> argparse.ArgumentParser:
     guard.add_argument("--describe", action="store_true",
                        help="also ask what kind of screen it is. Informational only, "
                             "and it costs about 6 seconds per capture")
-    guard.set_defaults(func=cmd_guard, ocr=True, notify=True)
+    guard.add_argument("--no-mesh", dest="mesh", action="store_false",
+                       help="paint flagged regions as whole rectangles instead of "
+                            "meshing them down to the parts that are not blank")
+    guard.set_defaults(func=cmd_guard, ocr=True, notify=True, mesh=True)
 
     vault = sub.add_parser("vault", help="inspect or empty the quarantine folder")
     vault.add_argument("--path", default=None,

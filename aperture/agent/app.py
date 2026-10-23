@@ -83,6 +83,10 @@ def build(
     screen: Path | None = None,
     decider_url: str | None = None,
     model_id: str = AGENT_MODEL,
+    # 2x2, where the clipboard guard uses 6x4. The grids differ because the units
+    # differ: the guard's regions are redaction boxes and want to be as small as
+    # possible, while these are the crops the agent sends to Bedrock and have to stay
+    # large enough for the cloud model to read. See ScreenBuffer.
     columns: int = 2,
     rows: int = 2,
     on_decision=None,

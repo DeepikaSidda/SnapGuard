@@ -123,6 +123,49 @@ The agent was told about the first and deliberately not warned about the second.
 Half the screen never left the machine, and only one half of that was for safety
 reasons. The rest was simply not worth sending.
 
+## How little it covers
+
+The first working version of this tool blacked out **56% of a screen** to hide one line of
+credentials. A user reported that as a bug four times before it was properly fixed, and
+each round was a different idea about the same question:
+
+| | Covered | What changed |
+|---|---|---|
+| whole frame | 56% | — |
+| 2×2 regions, subdivide what fires | 24% | ask the model again, smaller |
+| **6×4 regions** | 15% | stop making the regions big in the first place |
+| **+ mesh** | **6%** | stop asking the model where the pixels are |
+
+The last one is the interesting one, and it came from the user, who sent a picture of
+graph paper and said it should work like that. A graph-paper mesh is hundreds of squares
+and the model costs ~12 s a question, so the mesh cannot be something it is asked about.
+It doesn't have to be — two different questions had been conflated the whole time:
+
+```
+WHERE IS THERE SOMETHING SENSITIVE?   a judgement   only the model can answer it
+WHERE ARE THERE PIXELS?               arithmetic    free, exact, nothing to fool
+```
+
+`credential 0.915 on region 3` is not a location. So the regions the model flags are
+meshed into 14px squares, each square is measured, and only the ones that aren't
+background get painted. **The claim is unchanged — everything in this region goes — the
+empty half of a code pane simply stopped counting as "everything".** No model call, about
+4 ms, and the credential is still fully covered while the file tree, the terminal and the
+title bar all survive.
+
+This looks like the mistake this project already made and reverted — narrowing a flagged
+region to the regex scanner's matched box, which left three credentials legible because
+the scanner matched one secret of four. The difference is the whole point:
+
+- narrowing to a **regex hit** covers the secrets the scanner *recognised*
+- narrowing to **inked squares** covers every pixel that is *not background*
+
+A secret cannot hide in blank space, so dropping only blank space cannot expose one.
+There is no key format, line wrap or font size that defeats it. Full write-up, thresholds
+and fail-safe paths: [`research/README.md` §13–14](research/README.md).
+
+`--no-mesh` paints whole rectangles if you want the old behaviour.
+
 ## Measured against Amazon Nova
 
 Twelve labelled screens, same questions, same ground truth
@@ -280,6 +323,10 @@ Verified live on the author's machine:
 [16:28:29] decider credential=0.824 on tile 1 (r0c1, 1018x572) -> redact
 [16:28:30] REDACTED  2 region(s), 29% of the frame -> aperture-test-capture.safe.png
 ```
+
+That run is from the version with a 2×2 grid and no mesh, and 29% of a screen is far too
+much to cover to hide one line. A user said so, four times, and was right every time.
+See [how little it covers now](#how-little-it-covers).
 
 ### The clipboard path, step by step
 

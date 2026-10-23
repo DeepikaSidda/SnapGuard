@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Sequence
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 Box = tuple[int, int, int, int]
@@ -40,7 +41,23 @@ class Redaction:
         return len(self.boxes)
 
     def covered_pixels(self) -> int:
-        return sum((r - l) * (b - t) for l, t, r, b in self.boxes)
+        """Pixels painted over, counted once each.
+
+        This used to be a sum of box areas, which was fine while a redaction was two or
+        three large rectangles and quietly wrong afterwards. Regions overlap by 6% by
+        design -- so a line of text crossing a seam produces two bars that share pixels
+        -- and the mesh turns one region into a dozen bars. Summing areas inflated the
+        number, and the number in question is the one reported to a user who has already
+        complained three times that too much of their screen is covered. Overstating it
+        is not a safe direction to be wrong in.
+        """
+        if not self.boxes:
+            return 0
+        mask = np.zeros((self.image.height, self.image.width), dtype=bool)
+        for left, top, right, bottom in self.boxes:
+            if right > left and bottom > top:
+                mask[top:bottom, left:right] = True
+        return int(mask.sum())
 
     def fraction_of(self, original: Image.Image) -> float:
         total = original.width * original.height
@@ -76,8 +93,19 @@ def redact(
         else:
             draw.rectangle([left, top, right, bottom], fill=MARK_FILL)
 
-        draw.rectangle([left, top, right - 1, bottom - 1], outline=MARK_EDGE, width=3)
-        if label:
+        # Decoration scaled to the box. Since the mesh landed, a redaction is often a
+        # dozen narrow bars rather than one rectangle, and a 3px border with a label
+        # stamped in it would be more ink than the thing it surrounds -- and the border
+        # is drawn INSIDE the box, so on a 14px-tall bar it would cover the blacked-out
+        # pixels with a bright colour and draw the eye to exactly nothing.
+        wide = right - left >= 140
+        tall = bottom - top >= 30
+        draw.rectangle(
+            [left, top, right - 1, bottom - 1],
+            outline=MARK_EDGE,
+            width=3 if (wide and tall) else 1,
+        )
+        if label and wide and tall:
             draw.text((left + 10, top + 8), label, fill=MARK_EDGE)
 
     return Redaction(image=out, boxes=[_clamp(b, out.size) for b in boxes], mode=mode)
@@ -113,9 +141,9 @@ def resolve_boxes(
         the scanner found something the model missed, which is the case the two lanes
         exist to cover for each other.
 
-    Over-redaction is the safe failure here. The fix for covering too much is a finer
-    grid, so the tile is smaller, not trusting a localiser that only sees patterns it
-    has been taught.
+    Over-redaction is the safe failure here. The fixes for covering too much are a finer
+    grid, so the tile is smaller, and `mesh.tighten_all`, which drops the blank parts of
+    a tile. Neither one trusts a localiser that only sees patterns it has been taught.
 
     Returns the boxes to paint, and how many precise hits refined a flagged tile.
     """

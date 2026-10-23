@@ -67,6 +67,18 @@ class ScreenBuffer:
     tiles: list[Tile] = field(default_factory=list)
     result: GateResult | None = None
     asking_about: str = ""
+    # Coarse on purpose, and deliberately coarser than the gate's own default of 6x4.
+    # These tiles are not redaction boxes, they are the regions the agent names and the
+    # crops that get sent to the cloud model, so they have two constraints a redaction
+    # box does not have: a region has to be large enough for the cloud model to read
+    # (a 6x4 region of a laptop screen is a 180x152 thumbnail, which is useless to it),
+    # and few enough that an LLM can reason about them by number. 2x2 maps onto what a
+    # person would say anyway -- the editor, the terminal, the sidebar.
+    #
+    # The consequence is that this path is all-or-nothing per quarter: a region holding
+    # a credential is withheld whole rather than sent with the credential blacked out.
+    # Redacting the fine gate's boxes inside a coarse crop would be strictly better and
+    # is the obvious next piece of work; it is not built.
     columns: int = 2
     rows: int = 2
 
