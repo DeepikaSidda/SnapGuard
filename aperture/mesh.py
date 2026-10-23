@@ -331,7 +331,81 @@ def tighten(
                 )
                 start = None
 
-    return _merge_vertically(boxes) or [box]
+    return _drop_rules(image, _merge_vertically(boxes), cell) or [box]
+
+
+def _drop_rules(
+    image: Image.Image, boxes: Sequence[Box], cell: int
+) -> list[Box]:
+    """Remove isolated borders, dividers and scrollbars.
+
+    A 1px panel border has a strong gradient across it and none along it, so every cell
+    down its length reads as ink and `_merge_vertically` stacks them into a tall thin
+    bar. A user reported it as "there is no need of the vertical block but it covered" --
+    an 8x140px stripe down the edge of a card, hiding nothing.
+
+    This removes coverage, so the test for it is strict and has three parts.
+
+      ELONGATED.  Four times longer than it is wide, or the reverse.
+
+      TRANSLATION-INVARIANT ALONG ITS LENGTH.  This is the real discriminator and the
+      reason the first attempt failed. Width alone cannot separate a border from a narrow
+      column of text -- dilation grows a one-cell core to three cells, 18px at the
+      default, which is also about three characters. But a vertical rule is *the same
+      all the way down*: every row of pixels is identical, so the spread of the row means
+      is essentially zero. Text is not: rows alternate between glyph middles and the gaps
+      between lines, and the spread is an order of magnitude larger. Measured on a drawn
+      fixture, a 1px border scores under 1 and a line of credentials scores over 20.
+
+      ISOLATED.  A sliver abutting another covered box might be the edge of something the
+      rest of the mesh is already hiding, and dropping it would leave a 6px strip of a
+      credential on screen. Touching anything else means keeping it.
+
+    The tempting alternative -- stop treating a one-directional gradient as ink at all --
+    was rejected. The middle of a capital `I` stroke, and the middle of the `_` in
+    `sk_live_`, also have gradient in only one direction, so that change would have
+    thinned the mask inside real credentials to buy back a cosmetic stripe.
+    """
+    if len(boxes) < 2:
+        return list(boxes)
+
+    grey = image.convert("L")
+    kept: list[Box] = []
+    for box in boxes:
+        if _is_rule(grey, box) and not any(
+            other is not box and _touches(box, other, cell) for other in boxes
+        ):
+            continue
+        kept.append(box)
+    return kept
+
+
+def _is_rule(grey: Image.Image, box: Box, flatness: float = 3.0) -> bool:
+    """Is this box a plain line rather than something written?"""
+    width, height = box[2] - box[0], box[3] - box[1]
+    if width < 1 or height < 1:
+        return False
+
+    vertical = height >= width * 4
+    horizontal = width >= height * 4
+    if not (vertical or horizontal):
+        return False
+
+    patch = np.asarray(grey.crop(box), dtype=np.float32)
+    if patch.size == 0:
+        return False
+    # Along the long axis: a rule looks the same at every step, writing does not.
+    means = patch.mean(axis=1) if vertical else patch.mean(axis=0)
+    return bool(means.std() < flatness)
+
+
+def _touches(a: Box, b: Box, slack: int) -> bool:
+    return (
+        a[0] - slack < b[2]
+        and b[0] - slack < a[2]
+        and a[1] - slack < b[3]
+        and b[1] - slack < a[3]
+    )
 
 
 def _merge_vertically(boxes: Sequence[Box]) -> list[Box]:

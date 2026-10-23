@@ -350,3 +350,98 @@ def test_extension_can_only_grow_a_box():
     grown = extend_along_ink(image, original)
     assert grown[0][0] <= 320 and grown[0][2] >= 400
     assert grown[0][1] == 40 and grown[0][3] == 70, "vertical extent must not change"
+
+
+# ---- borders are structure, not content -------------------------------------
+
+
+def test_an_isolated_panel_border_is_not_covered():
+    """Reported: "there is no need of the vertical block but it covered".
+
+    A 1px card border has gradient across it and none along it, so every cell down its
+    length reads as ink and the vertical merge stacks them into a tall thin stripe.
+    """
+    img = Image.new("RGB", (400, 300), BACKGROUND)
+    d = ImageDraw.Draw(img)
+    d.line([(20, 20), (20, 280)], fill=(90, 90, 100), width=1)   # the border
+    d.text((120, 140), "ordinary text here", font=_font(13), fill=(220, 220, 230))
+
+    boxes = tighten(img, (0, 0, 400, 300))
+    covering_border = [b for b in boxes if b[0] <= 24 and (b[3] - b[1]) > 100]
+    assert not covering_border, f"the border stripe was covered: {covering_border}"
+
+
+def test_a_sliver_touching_real_content_is_kept():
+    """The safety half. An isolated stripe goes; one abutting covered content stays.
+
+    Otherwise the rule would shave the leading 6px off a redacted credential.
+    """
+    from aperture.mesh import _drop_rules
+
+    img = Image.new("RGB", (500, 300), BACKGROUND)
+    ImageDraw.Draw(img).line([(97, 100), (97, 190)], fill=(90, 90, 100), width=1)
+
+    bar = (100, 100, 400, 118)
+    sliver = (94, 100, 100, 190)
+    kept = _drop_rules(img, [bar, sliver], DEFAULT_CELL)
+    assert sliver in kept, "a sliver next to covered content must not be dropped"
+
+
+def test_a_lone_box_is_never_dropped():
+    """With nothing else on screen, a thin tall box is all the evidence there is."""
+    from aperture.mesh import _drop_rules
+
+    img = Image.new("RGB", (400, 300), BACKGROUND)
+    only = (10, 10, 16, 200)
+    assert _drop_rules(img, [only], DEFAULT_CELL) == [only]
+
+
+def test_a_narrow_column_of_text_is_not_mistaken_for_a_border():
+    """The case width alone could not separate: three characters wide and very tall."""
+    from aperture.mesh import _is_rule
+
+    img = Image.new("RGB", (200, 300), BACKGROUND)
+    d = ImageDraw.Draw(img)
+    for y in range(20, 260, 20):
+        d.text((20, y), "8f2", font=_font(12), fill=(220, 220, 230))
+
+    assert not _is_rule(img.convert("L"), (14, 14, 46, 276)), (
+        "a tall narrow column of text must not be dropped as a border"
+    )
+
+
+def test_a_plain_vertical_line_is_recognised_as_a_border():
+    from aperture.mesh import _is_rule
+
+    img = Image.new("RGB", (200, 300), BACKGROUND)
+    ImageDraw.Draw(img).line([(20, 20), (20, 280)], fill=(90, 90, 100), width=1)
+    assert _is_rule(img.convert("L"), (14, 14, 32, 286))
+
+
+def test_a_horizontal_divider_is_recognised_too():
+    from aperture.mesh import _is_rule
+
+    img = Image.new("RGB", (400, 200), BACKGROUND)
+    ImageDraw.Draw(img).line([(20, 100), (380, 100)], fill=(90, 90, 100), width=1)
+    assert _is_rule(img.convert("L"), (14, 94, 386, 112))
+
+
+def test_dropping_borders_does_not_uncover_text():
+    """The property, restated: ink that is actually text still ends up inside a box."""
+    img = Image.new("RGB", (400, 300), BACKGROUND)
+    d = ImageDraw.Draw(img)
+    d.line([(20, 20), (20, 280)], fill=(90, 90, 100), width=1)
+    d.text((120, 140), "AKIAEXAMPLEKEYID1234", font=_font(13), fill=(206, 145, 120))
+
+    boxes = tighten(img, (0, 0, 400, 300))
+    # Every pixel of the TEXT must be covered; the border is explicitly allowed through.
+    arr = np.asarray(img.convert("RGB"), dtype=np.int16)
+    base = np.asarray(BACKGROUND, dtype=np.int16)
+    ys, xs = np.nonzero(np.abs(arr - base).sum(axis=2) > 12)
+    text_pixels = [(x, y) for x, y in zip(xs.tolist(), ys.tolist()) if x > 40]
+    uncovered = [
+        (x, y)
+        for x, y in text_pixels
+        if not any(l <= x < r and t <= y < b for l, t, r, b in boxes)
+    ]
+    assert not uncovered, f"{len(uncovered)} text pixels escaped: {uncovered[:5]}"
