@@ -20,9 +20,24 @@ venv/
 # are synthetic.
 #
 # Scratch output from a local run is not committed.
+#
+# The prefixed patterns below are not tidiness, they are a near miss. A spike run over a
+# real capture wrote `evalset/out/_small_source.png` -- an UNREDACTED copy of a
+# screenshot with a live API key in it -- into this directory, untracked but not
+# ignored. Exactly the same way the keys CSV nearly went public earlier. Research scripts
+# that take a real image as input must not leave their intermediates somewhere a
+# `git add .` can reach.
 evalset/out/_scratch*
 evalset/out/*.redacted.png
 evalset/out/_verify_*
+evalset/out/_cell_*
+evalset/out/_vs_*
+evalset/out/_aws*
+evalset/out/_mesh_*
+evalset/out/_grid_*
+evalset/out/_small_*
+evalset/out/_quota_*
+evalset/out/_probe_*
 
 # Benchmark output is committed on purpose -- it is evidence. Uncomment to exclude.
 # evalset/results.json
