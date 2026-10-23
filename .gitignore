@@ -30,3 +30,28 @@ evalset/out/_verify_*
 # Never commit a real screenshot or capture to this repository.
 *.capture.png
 captures/
+
+# Real credentials. A keys CSV was found sitting in this folder, untracked but not
+# ignored -- one `git add .` away from being public. These patterns are deliberately
+# broad: the cost of ignoring a file you wanted is a minute, the cost of publishing a
+# key is an incident.
+*accessKeys*
+*access_keys*
+*credentials*
+*.csv
+*.pem
+*.key
+*.pfx
+*.p12
+.env
+.env.*
+*.env
+secrets.*
+*_rsa
+*_ed25519
+id_rsa*
+
+# The quarantine folder, wherever someone points it.
+quarantine/
+aperture-quarantine/
+.aperture/
