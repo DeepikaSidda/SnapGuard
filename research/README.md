@@ -1008,3 +1008,107 @@ Nothing here establishes how either service behaves on a screenshot of a phone, 
 non-Latin script, or a photograph of a screen. And `ENTITY_KINDS` maps sixteen Comprehend
 types onto four Aperture rules by hand, which is a mapping nobody has checked against
 real positives for anything except `AWS_SECRET_KEY` and `NAME`.
+
+---
+
+## 16. The fine grid broke a rule, and the eval set said it was fine
+
+Full verification after a day of changes — new grid, new refinement default, a moved
+threshold, the mesh, the label whitelist. Everything passed:
+
+```
+1. doctor                     4/4 ok
+2. offline suite              104 passed
+3. gate smoke (real model)    9 passed
+4. overlay leak test          4 passed
+5. eval set, 12 screens       12/12, held-out 6/6, $0.00
+6. agent end-to-end + Bedrock ok
+```
+
+Then the `_explained_contacts.png` figure was regenerated at the new grid, and the
+caption no longer matched it. The old figure said **0 of 4 regions sent, 100% kept
+local**. The new run said **20 of 24 sent, 17% kept local**.
+
+### What was actually happening
+
+`personal_contact` is a region rule. At 2x2, all four regions of the CRM screen fired it,
+so nothing was sent. At 6x4 only 4 regions of 24 fire — because the rule is a judgement
+about a *pane of records*, and a 359x286 crop holding `+44 770` is not a pane of records.
+
+Settled by reading pixels rather than by argument (`check_contacts_at_6x4.py`): black out
+the four flagged regions, OCR everything left.
+
+```
+  regions only: 4 boxes, 19.3% of the frame covered
+    emails still readable : 0
+    phone-shaped runs     : 6   ['+1 (415) 555-0162', '+234 802 555 0147', ...]
+
+  what the 20 sendable regions contain:
+    region  4: 'ADDRESS MarlowGardens,LeedsLS62QT'
+    region 10: 'ClaytonSt,SanFranciscoCA  wolowoRoad,Ikoyi,Lagos'
+    region 16: 'attanCourt,Dublin2  PaliHill,Mumbai400050  Storgata44B,0184Oslo'
+```
+
+**Seven people's phone numbers and home addresses would have gone to Amazon Bedrock.**
+
+This is the screen the whole README brags about — the one both Nova models waved through
+and Decider caught. The grid change quietly handed most of it back.
+
+### The part that should be uncomfortable
+
+Screen-level accuracy was **12/12 before and after**. It never moved, because the verdict
+was still REDACT and REDACT is not PASS, and the eval scores `hold` against `send`. Every
+number in the verification above was green while this was true.
+
+That is the fourth time in this project that an aggregate was true and insufficient:
+
+| | the aggregate said | what was wrong underneath |
+|---|---|---|
+| §10 | 12/12 | a batched question cleared a frame with a live key, on a 0.005 margin |
+| §11 | 12/12 | a downscale that "saved 2.5s" let `token_in_url` through |
+| §12 | 12/12 | the credential threshold was missing 3 of 5 credential *regions* |
+| §16 | 12/12 | 20 of 24 regions of the contacts screen became sendable |
+
+Four for four. The lesson is not "collect region-level ground truth" — §12 did that and
+this still got through, because §12's ground truth was collected at a 2x2 grid and never
+recollected. It is narrower and more annoying: **an aggregate cannot detect a change in
+the unit it aggregates over.** Changing the grid changed what a region *is*, and every
+region-level number in this repository silently became a number about something else.
+
+§13 even wrote this down — *"Region-level ground truth was not re-collected at 6x4, so
+what is verified here is that no screen changed its verdict"* — and then shipped anyway.
+Noting a gap is not the same as closing it.
+
+### The fix, measured before it was written
+
+The other three whole-frame rules all exist for one reason, stated in `questions.py`: if
+the screen *is* a bank statement, there is no clean part to send. A screen that *is* a
+contacts list has no clean part either, so `personal_contact` needed a whole-frame
+sibling rather than a tuned threshold.
+
+Two candidate wordings, on all twelve screens, one request each:
+
+| screen | `contact_sheet` (plural) | `any_contact` (loose) |
+|---|---|---|
+| **contacts** | **0.963** | **0.941** |
+| id_card | 0.463 | 0.354 |
+| docs | 0.089 | 0.035 |
+| dm | 0.070 | 0.307 |
+| the other eight | 0.049–0.076 | 0.030–0.045 |
+| **margin** | **+0.500** | **+0.587** |
+
+Both separate cleanly. The plural wording ships at **0.70** despite the smaller margin,
+because the loose one asks a question that is also true of a README with one support
+address on it, and withholding a whole screen for that is the over-covering complaint in
+yet another costume. No eval screen has an incidental email, so that risk is argued
+rather than measured — stated here so nobody quotes the margin as though it settled it.
+
+Result on the screen in question: **0 of 24 regions sent, 100% kept local, WITHHOLD.**
+
+### Still not done
+
+Region-level ground truth has still not been recollected at 6x4. `personal_contact` is
+now backstopped by a whole-frame rule, and `credential` is the one with measured
+region-level evidence (§12) — but that evidence is from a 2x2 grid, which §16 is the
+proof matters. The threshold of 0.35 derived there is a threshold about a different-sized
+thing than the gate now uses.

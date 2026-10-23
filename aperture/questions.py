@@ -110,6 +110,47 @@ CONTEXT_RULES: tuple[Rule, ...] = (
         describes="account balances or financial records are on screen",
     ),
     Rule(
+        name="contact_sheet",
+        question=noul(
+            "Does this screen show a list or table of several people's personal "
+            "contact details, such as their phone numbers, email addresses or home "
+            "addresses?",
+            true="a set of records holding contact details for multiple people is on "
+                 "screen",
+            false="no list of people's contact details is shown",
+        ),
+        # This rule exists because the 6x4 grid broke the one below it, and the eval set
+        # said everything was fine while it happened.
+        #
+        # `personal_contact` is a REGION rule, and at a 2x2 grid all four regions of the
+        # CRM screen fired it, so nothing was sent. At 6x4 only 4 regions of 24 fire,
+        # because `personal_contact` is a judgement about a pane of records and a
+        # 359x286 crop holding `+44 770` is not one. Checked by blacking out the four
+        # flagged regions and OCR-ing the rest: seven people's phone numbers, street
+        # addresses and names were still readable and would have gone to Bedrock.
+        #
+        # Screen-level accuracy stayed at 12/12 throughout, because the verdict was
+        # still REDACT and REDACT is not PASS. The fourth time in this project that an
+        # aggregate was true and insufficient; see research/README.md sections 10, 11,
+        # 13 and 16.
+        #
+        # Asked as a whole frame for the same reason the three rules around it are: a
+        # screen that *is* a contacts list has no clean corner, any more than a bank
+        # statement does. The plural wording is deliberate and was compared against a
+        # looser "are any contact details visible" on all twelve eval screens:
+        #
+        #     contact_sheet   contacts 0.963, highest negative 0.463 (id_card)
+        #     any_contact     contacts 0.941, highest negative 0.354 (dm)
+        #
+        # Both separate cleanly. The plural one was chosen despite the smaller margin,
+        # because the looser wording would also fire on a README with one support
+        # address on it and withhold the whole screen -- and no eval screen has an
+        # incidental email, so that risk is argued rather than measured.
+        threshold=0.70,
+        on_match=Verdict.WITHHOLD,
+        describes="a list of several people's contact details is on screen",
+    ),
+    Rule(
         name="identity_document",
         question=noul(
             "Does this screen show an identity document, passport, licence or a "

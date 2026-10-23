@@ -73,27 +73,41 @@ right:
 $ aperture ask "my deploy is failing, what's wrong?" --screen evalset/out/deploy_failure.png
 
   THE GATE RAN
-  screen looks like   : code_editor (confidence 0.72)
   private_conversation: 0.039
   financial_records   : 0.065
+  identity_document   : 0.048
   findings:
-    credential=0.824 on tile 1 (r0c1, 1018x572) -> redact
+    credential=0.915 on tile 3 (r0c3, 359x286) -> redact
+    credential=0.639 on tile 4 (r0c4, 359x286) -> redact
+    credential=0.776 on tile 9 (r1c3, 359x303) -> redact
+    credential=0.751 on tile 10 (r1c4, 359x303) -> redact
+  regions: 3 of 24 sent, 4 withheld for safety, 2 skipped as unrelated,
+           15 unreadable  (88% kept local)
   VERDICT: REDACT
-  cost   : 5 local decisions, 75162 ms, $0.00
+  cost   : 17 local decisions, 280319 ms, $0.00
 
   WHAT THE AGENT SAID
-  The deployment is failing due to a database connection timeout...
-  PoolTimeout: could not acquire a connection within 5.0s (pool size 5, in use 5)
+  The deployment is failing due to a **database connection pool timeout**:
+  PoolTimeout: could not acquire a connection within 5.0s (pool size 5, in use 0)
 
-  **What was withheld:**
-  Region 1 (top-right) was withheld because it contained a credential or secret
-  value. You should rotate this credential immediately.
+  **Withheld regions:**
+  Regions [3, 4, 9, 10] were withheld for safety because they contained a
+  credential or secret value. If this was a database password or API key, you
+  should rotate the credential immediately.
 
-  narrowed  requested [0, 1, 2, 3] -> allowed [0, 2], withheld [1, 3]
+  narrowed  requested [0..23] -> allowed [0, 6, 12], withheld 21 regions
+  1 guarded calls: 1 narrowed, 0 denied; 17 local decisions
 ```
 
-The agent asked for all four regions and got two. It still solved the problem, and told
-the user what it couldn't see and what to do about it.
+**The agent asked to read the whole screen and was given three regions of twenty-four.**
+It still solved the problem, and told the user which parts it could not see and what to
+do about them.
+
+Three numbers in there are the whole design. **4 withheld for safety** — those are the
+credentials. **2 skipped as unrelated** — safe to send, but nothing to do with a deploy
+error, so they were not sent and the agent was deliberately *not* told about them.
+**15 unreadable** — empty editor space, cleared without a verdict being recorded about
+it. 88% of the screen never left the machine, and only a fifth of that was for safety.
 
 ### See the decision
 
@@ -103,10 +117,11 @@ aperture check evalset/out/deploy_failure.png --explain explained.png
 
 ![What the gate saw](evalset/out/_explained.png)
 
-The region grid with every score the gate actually got. Green regions were sent and
-their content is legible. Region 1 was withheld at `credential 0.82` and its content is
-destroyed — blurred and washed, not merely dimmed, because the first version of this
-renderer displayed the credentials it was claiming to protect.
+The 6×4 region grid with every score the gate actually got. Green regions were sent and
+their content is legible. The withheld regions are *destroyed* — blurred and then washed,
+not merely dimmed, because the first version of this renderer displayed the credentials
+it was claiming to protect, and the test that now guards it OCRs the output and asserts
+no pattern can be matched in what comes back.
 
 A screen where nothing can be salvaged looks like this instead:
 
