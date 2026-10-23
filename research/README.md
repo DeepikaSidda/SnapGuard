@@ -424,3 +424,121 @@ answer.
 
 Final state: 12/12, held-out 6/6, median 48.8 s. Roughly six seconds faster than before
 this exercise, all of it from lever 3, and two documented reasons not to go further.
+
+---
+
+## 12. Does the calibration hold here? And what it revealed about a hand-picked threshold
+
+AWS publish an expected calibration error of **0.023** for this checkpoint on
+POPE-adversarial. Every project in this hackathon can quote that. It is a claim about
+their benchmark, and this project leans on those confidences being honest, because the
+thresholds in `questions.py` *are* the policy.
+
+So `evalset/calibrate.py` collects every individual judgement the gate makes across the
+12-screen set -- 3 whole-frame rules per screen plus 2 region rules on each of 4 regions,
+**132 judgements** -- and scores each against region-level ground truth taken from the
+coordinates the screens were drawn at (`evalset/regions.py`, so the labels are exact
+rather than an annotator's opinion).
+
+Confidence for a yes/no question is `max(p, 1-p)`: an answer of 0.05 is not an unconfident
+yes, it is a confident no. That is the standard binary treatment and what makes the
+numbers comparable to AWS's.
+
+### Is the confidence honest?
+
+| Stated confidence | n | Says | Actually right | Gap |
+|---|---|---|---|---|
+| 0.5 – 0.6 | 3 | 54% | **0%** | **−54.2%** |
+| 0.6 – 0.7 | 2 | 67% | 100% | +33.1% |
+| 0.7 – 0.8 | 4 | 76% | 100% | +24.3% |
+| 0.8 – 0.9 | 19 | 87% | 100% | +12.7% |
+| 0.9 – 1.0 | 104 | 94% | 99% | +4.7% |
+
+**Expected calibration error: 0.080.** Against AWS's published 0.023 — about 3.5× worse on
+screenshots of a developer's screen than on their benchmark. Brier score 0.022, which
+looks excellent and mostly reflects the class imbalance below.
+
+Two things to take from the table:
+
+**Below 0.6 the model is overconfident and useless.** It claimed 54% and was wrong all
+three times. The gate should treat that band as "I don't know", not as a weak signal.
+
+**Above 0.6 it is *under*-confident.** It claimed 87% and was right 100% of the time. When
+this model commits, it is more reliable than it says — which is the better direction for a
+safety gate to be wrong in.
+
+### The honest caveat on those numbers
+
+**Only 13 of 132 judgements are positives.** A gate that answered "no" to everything would
+score 90%; this scored 97%. The aggregate figures are therefore dominated by easy
+negatives — 104 of the 132 judgements sit in the top confidence bin, nearly all of them
+confident and correct "no"s about empty regions. The ECE is real but it is measuring an
+easy distribution. The threshold sweep below is the part computed on the positives, and it
+is the part worth acting on.
+
+### What it found: the hand-picked threshold was wrong
+
+The `credential` threshold was 0.50, chosen by eye from a handful of scores. Swept against
+ground truth over all 48 regions:
+
+| Threshold | Credential regions missed | False alarms |
+|---|---|---|
+| 0.25 | 1 | 1 |
+| **0.35** | **1** | **0** |
+| 0.45 | 2 | 0 |
+| 0.50 | **3** | 0 |
+
+**0.50 missed three of the five regions that actually held a credential.** Two of those
+answered **0.445** and **0.459** — just under the line drawn by eye. Moving to 0.35
+catches both and costs nothing; 0.25 buys nothing further and introduces a false alarm.
+
+Recomputed on the saved answers:
+
+```
+threshold 0.50 : caught 2/5 credential regions, 0 false alarms
+threshold 0.35 : caught 4/5 credential regions, 0 false alarms
+```
+
+Region recall doubled at zero cost. Applied.
+
+### Why 12/12 hid it
+
+The screen-level verdicts were 12/12 both before and after. `token_in_url` was being
+caught by `financial_records` firing on its reconciliation figures, not by the credential
+rule at all; `ide_env` was caught by its other region. **A correct verdict can hide a rule
+that is barely working**, and only region-level ground truth exposes it. This is the third
+time in this project that an aggregate number was true and insufficient (see sections 10
+and 11).
+
+### An integrity cost, stated plainly
+
+The threshold was tuned using misses that occurred on `token_in_url` and `ide_env`.
+`token_in_url` is one of the six held-out screens.
+
+**So the held-out split is now compromised for the `credential` rule.** The "6/6 held-out,
+nothing was tuned on these" claim remains true for `private_conversation`,
+`financial_records`, `identity_document` and `personal_contact`, and is no longer true for
+`credential`. It should not be quoted as though it were.
+
+The honest trade: a measured threshold on a contaminated split beats a guessed threshold
+on a clean one, because the guessed one was missing 60% of the credential regions. But the
+contamination is real and the right fix is new held-out screens, which has not been done.
+
+### Worst answers
+
+| Screen | Region | Rule | Said | Truth |
+|---|---|---|---|---|
+| token_in_url | 1 | credential | 0.081 | **yes** |
+| token_in_url | 0 | credential | 0.445 | **yes** |
+| ide_env | 1 | credential | 0.459 | **yes** |
+| public_metrics | frame | financial_records | 0.530 | no |
+
+The first is the genuine failure: a token in a browser address bar, answered at 0.081.
+Nothing short of an absurd threshold catches that, and it is the strongest argument in
+this repository for keeping the deterministic lane alongside the model.
+
+The last one is the public revenue dashboard — answered 0.530 against a 0.55 threshold, so
+it did not fire. Two hundredths from a false positive, which is uncomfortably close and is
+the next threshold worth deriving rather than guessing.
+
+![Reliability diagram](../evalset/out/_calibration.png)

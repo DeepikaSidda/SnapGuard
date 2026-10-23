@@ -1,0 +1,1058 @@
+[
+  {
+    "screen": "ide_env",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0432,
+    "truth": false,
+    "latency_ms": 16788.1
+  },
+  {
+    "screen": "ide_env",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0884,
+    "truth": false,
+    "latency_ms": 16788.1
+  },
+  {
+    "screen": "ide_env",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0442,
+    "truth": false,
+    "latency_ms": 16788.1
+  },
+  {
+    "screen": "ide_env",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.9175,
+    "truth": true,
+    "latency_ms": 8536.41
+  },
+  {
+    "screen": "ide_env",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0411,
+    "truth": false,
+    "latency_ms": 8536.41
+  },
+  {
+    "screen": "ide_env",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.4588,
+    "truth": true,
+    "latency_ms": 8478.78
+  },
+  {
+    "screen": "ide_env",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0408,
+    "truth": false,
+    "latency_ms": 8478.78
+  },
+  {
+    "screen": "ide_env",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.1083,
+    "truth": false,
+    "latency_ms": 8193.03
+  },
+  {
+    "screen": "ide_env",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0474,
+    "truth": false,
+    "latency_ms": 8193.03
+  },
+  {
+    "screen": "ide_env",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.1169,
+    "truth": false,
+    "latency_ms": 9817.47
+  },
+  {
+    "screen": "ide_env",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0496,
+    "truth": false,
+    "latency_ms": 9817.47
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0394,
+    "truth": false,
+    "latency_ms": 10057.71
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0645,
+    "truth": false,
+    "latency_ms": 10057.71
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0483,
+    "truth": false,
+    "latency_ms": 10057.71
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0896,
+    "truth": false,
+    "latency_ms": 8404.08
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0339,
+    "truth": false,
+    "latency_ms": 8404.08
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.8236,
+    "truth": true,
+    "latency_ms": 8371.85
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0358,
+    "truth": false,
+    "latency_ms": 8371.85
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.077,
+    "truth": false,
+    "latency_ms": 8522.4
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0335,
+    "truth": false,
+    "latency_ms": 8522.4
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.1082,
+    "truth": false,
+    "latency_ms": 8293.77
+  },
+  {
+    "screen": "deploy_failure",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.047,
+    "truth": false,
+    "latency_ms": 8293.77
+  },
+  {
+    "screen": "bank",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0409,
+    "truth": false,
+    "latency_ms": 10054.08
+  },
+  {
+    "screen": "bank",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.8372,
+    "truth": true,
+    "latency_ms": 10054.08
+  },
+  {
+    "screen": "bank",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0405,
+    "truth": false,
+    "latency_ms": 10054.08
+  },
+  {
+    "screen": "bank",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.13,
+    "truth": false,
+    "latency_ms": 10066.5
+  },
+  {
+    "screen": "bank",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0438,
+    "truth": false,
+    "latency_ms": 10066.5
+  },
+  {
+    "screen": "bank",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.0856,
+    "truth": false,
+    "latency_ms": 8295.64
+  },
+  {
+    "screen": "bank",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0383,
+    "truth": false,
+    "latency_ms": 8295.64
+  },
+  {
+    "screen": "bank",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.0789,
+    "truth": false,
+    "latency_ms": 8237.12
+  },
+  {
+    "screen": "bank",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0318,
+    "truth": false,
+    "latency_ms": 8237.12
+  },
+  {
+    "screen": "bank",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.0803,
+    "truth": false,
+    "latency_ms": 8315.44
+  },
+  {
+    "screen": "bank",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0338,
+    "truth": false,
+    "latency_ms": 8315.44
+  },
+  {
+    "screen": "dm",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.9163,
+    "truth": true,
+    "latency_ms": 10165.93
+  },
+  {
+    "screen": "dm",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0464,
+    "truth": false,
+    "latency_ms": 10165.93
+  },
+  {
+    "screen": "dm",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0553,
+    "truth": false,
+    "latency_ms": 10165.93
+  },
+  {
+    "screen": "dm",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0801,
+    "truth": false,
+    "latency_ms": 8390.93
+  },
+  {
+    "screen": "dm",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0774,
+    "truth": false,
+    "latency_ms": 8390.93
+  },
+  {
+    "screen": "dm",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.0804,
+    "truth": false,
+    "latency_ms": 10023.19
+  },
+  {
+    "screen": "dm",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0338,
+    "truth": false,
+    "latency_ms": 10023.19
+  },
+  {
+    "screen": "dm",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.1135,
+    "truth": false,
+    "latency_ms": 8921.2
+  },
+  {
+    "screen": "dm",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0478,
+    "truth": false,
+    "latency_ms": 8921.2
+  },
+  {
+    "screen": "dm",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.0906,
+    "truth": false,
+    "latency_ms": 9660.49
+  },
+  {
+    "screen": "dm",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0377,
+    "truth": false,
+    "latency_ms": 9660.49
+  },
+  {
+    "screen": "id_card",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0482,
+    "truth": false,
+    "latency_ms": 10209.55
+  },
+  {
+    "screen": "id_card",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0779,
+    "truth": false,
+    "latency_ms": 10209.55
+  },
+  {
+    "screen": "id_card",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.7666,
+    "truth": true,
+    "latency_ms": 10209.55
+  },
+  {
+    "screen": "id_card",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0836,
+    "truth": false,
+    "latency_ms": 8468.54
+  },
+  {
+    "screen": "id_card",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.115,
+    "truth": false,
+    "latency_ms": 8468.54
+  },
+  {
+    "screen": "id_card",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.0993,
+    "truth": false,
+    "latency_ms": 8413.92
+  },
+  {
+    "screen": "id_card",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0419,
+    "truth": false,
+    "latency_ms": 8413.92
+  },
+  {
+    "screen": "id_card",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.0903,
+    "truth": false,
+    "latency_ms": 8507.68
+  },
+  {
+    "screen": "id_card",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0791,
+    "truth": false,
+    "latency_ms": 8507.68
+  },
+  {
+    "screen": "id_card",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.101,
+    "truth": false,
+    "latency_ms": 9882.86
+  },
+  {
+    "screen": "id_card",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0425,
+    "truth": false,
+    "latency_ms": 9882.86
+  },
+  {
+    "screen": "contacts",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0759,
+    "truth": false,
+    "latency_ms": 10362.14
+  },
+  {
+    "screen": "contacts",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0653,
+    "truth": false,
+    "latency_ms": 10362.14
+  },
+  {
+    "screen": "contacts",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0531,
+    "truth": false,
+    "latency_ms": 10362.14
+  },
+  {
+    "screen": "contacts",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0767,
+    "truth": false,
+    "latency_ms": 8399.35
+  },
+  {
+    "screen": "contacts",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.8352,
+    "truth": true,
+    "latency_ms": 8399.35
+  },
+  {
+    "screen": "contacts",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.0834,
+    "truth": false,
+    "latency_ms": 9174.26
+  },
+  {
+    "screen": "contacts",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.6967,
+    "truth": true,
+    "latency_ms": 9174.26
+  },
+  {
+    "screen": "contacts",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.0831,
+    "truth": false,
+    "latency_ms": 9317.87
+  },
+  {
+    "screen": "contacts",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.7922,
+    "truth": true,
+    "latency_ms": 9317.87
+  },
+  {
+    "screen": "contacts",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.0801,
+    "truth": false,
+    "latency_ms": 9385.34
+  },
+  {
+    "screen": "contacts",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.7263,
+    "truth": true,
+    "latency_ms": 9385.34
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0405,
+    "truth": false,
+    "latency_ms": 13484.93
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.6406,
+    "truth": true,
+    "latency_ms": 13484.93
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0439,
+    "truth": false,
+    "latency_ms": 13484.93
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.4449,
+    "truth": true,
+    "latency_ms": 9475.72
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0341,
+    "truth": false,
+    "latency_ms": 9475.72
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.0811,
+    "truth": true,
+    "latency_ms": 9676.88
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0381,
+    "truth": false,
+    "latency_ms": 9676.88
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.087,
+    "truth": false,
+    "latency_ms": 9407.02
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0357,
+    "truth": false,
+    "latency_ms": 9407.02
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.0945,
+    "truth": false,
+    "latency_ms": 9582.65
+  },
+  {
+    "screen": "token_in_url",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0423,
+    "truth": false,
+    "latency_ms": 9582.65
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0364,
+    "truth": false,
+    "latency_ms": 11906.95
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0729,
+    "truth": false,
+    "latency_ms": 11906.95
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0465,
+    "truth": false,
+    "latency_ms": 11906.95
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0805,
+    "truth": false,
+    "latency_ms": 12566.32
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0323,
+    "truth": false,
+    "latency_ms": 12566.32
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.1132,
+    "truth": false,
+    "latency_ms": 10134.32
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0473,
+    "truth": false,
+    "latency_ms": 10134.32
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.0849,
+    "truth": false,
+    "latency_ms": 16051.87
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0328,
+    "truth": false,
+    "latency_ms": 16051.87
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.1186,
+    "truth": false,
+    "latency_ms": 17883.76
+  },
+  {
+    "screen": "terminal_error",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0488,
+    "truth": false,
+    "latency_ms": 17883.76
+  },
+  {
+    "screen": "docs",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0401,
+    "truth": false,
+    "latency_ms": 26449.95
+  },
+  {
+    "screen": "docs",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0437,
+    "truth": false,
+    "latency_ms": 26449.95
+  },
+  {
+    "screen": "docs",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0461,
+    "truth": false,
+    "latency_ms": 26449.95
+  },
+  {
+    "screen": "docs",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0911,
+    "truth": false,
+    "latency_ms": 11375.54
+  },
+  {
+    "screen": "docs",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0332,
+    "truth": false,
+    "latency_ms": 11375.54
+  },
+  {
+    "screen": "docs",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.0957,
+    "truth": false,
+    "latency_ms": 9984.59
+  },
+  {
+    "screen": "docs",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0382,
+    "truth": false,
+    "latency_ms": 9984.59
+  },
+  {
+    "screen": "docs",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.2568,
+    "truth": false,
+    "latency_ms": 10107.8
+  },
+  {
+    "screen": "docs",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.038,
+    "truth": false,
+    "latency_ms": 10107.8
+  },
+  {
+    "screen": "docs",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.1178,
+    "truth": false,
+    "latency_ms": 11689.05
+  },
+  {
+    "screen": "docs",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0418,
+    "truth": false,
+    "latency_ms": 11689.05
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0396,
+    "truth": false,
+    "latency_ms": 11933.6
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0844,
+    "truth": false,
+    "latency_ms": 11933.6
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0463,
+    "truth": false,
+    "latency_ms": 11933.6
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.1342,
+    "truth": false,
+    "latency_ms": 9662.47
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0355,
+    "truth": false,
+    "latency_ms": 9662.47
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.1132,
+    "truth": false,
+    "latency_ms": 9135.77
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0473,
+    "truth": false,
+    "latency_ms": 9135.77
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.1717,
+    "truth": false,
+    "latency_ms": 8514.1
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0311,
+    "truth": false,
+    "latency_ms": 8514.1
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.1186,
+    "truth": false,
+    "latency_ms": 7990.53
+  },
+  {
+    "screen": "sha_soup",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0488,
+    "truth": false,
+    "latency_ms": 7990.53
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0339,
+    "truth": false,
+    "latency_ms": 11883.83
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.5303,
+    "truth": false,
+    "latency_ms": 11883.83
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0412,
+    "truth": false,
+    "latency_ms": 11883.83
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0786,
+    "truth": false,
+    "latency_ms": 8564.9
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0306,
+    "truth": false,
+    "latency_ms": 8564.9
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.0737,
+    "truth": false,
+    "latency_ms": 8647.04
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0313,
+    "truth": false,
+    "latency_ms": 8647.04
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.0849,
+    "truth": false,
+    "latency_ms": 8721.39
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0345,
+    "truth": false,
+    "latency_ms": 8721.39
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.0984,
+    "truth": false,
+    "latency_ms": 8531.02
+  },
+  {
+    "screen": "public_metrics",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0433,
+    "truth": false,
+    "latency_ms": 8531.02
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "private_conversation",
+    "scope": "frame",
+    "probability": 0.0453,
+    "truth": false,
+    "latency_ms": 10262.73
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "financial_records",
+    "scope": "frame",
+    "probability": 0.0526,
+    "truth": false,
+    "latency_ms": 10262.73
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "identity_document",
+    "scope": "frame",
+    "probability": 0.0476,
+    "truth": false,
+    "latency_ms": 10262.73
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "credential",
+    "scope": "region 0",
+    "probability": 0.0804,
+    "truth": false,
+    "latency_ms": 8647.15
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "personal_contact",
+    "scope": "region 0",
+    "probability": 0.0383,
+    "truth": false,
+    "latency_ms": 8647.15
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "credential",
+    "scope": "region 1",
+    "probability": 0.1164,
+    "truth": false,
+    "latency_ms": 9769.39
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "personal_contact",
+    "scope": "region 1",
+    "probability": 0.0476,
+    "truth": false,
+    "latency_ms": 9769.39
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "credential",
+    "scope": "region 2",
+    "probability": 0.0859,
+    "truth": false,
+    "latency_ms": 8436.81
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "personal_contact",
+    "scope": "region 2",
+    "probability": 0.0382,
+    "truth": false,
+    "latency_ms": 8436.81
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "credential",
+    "scope": "region 3",
+    "probability": 0.1213,
+    "truth": false,
+    "latency_ms": 8132.17
+  },
+  {
+    "screen": "dark_editor",
+    "rule": "personal_contact",
+    "scope": "region 3",
+    "probability": 0.0489,
+    "truth": false,
+    "latency_ms": 8132.17
+  }
+]
