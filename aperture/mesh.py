@@ -357,27 +357,29 @@ def _drop_rules(
       between lines, and the spread is an order of magnitude larger. Measured on a drawn
       fixture, a 1px border scores under 1 and a line of credentials scores over 20.
 
-      ISOLATED.  A sliver abutting another covered box might be the edge of something the
-      rest of the mesh is already hiding, and dropping it would leave a 6px strip of a
-      credential on screen. Touching anything else means keeping it.
+    There was a third condition -- that the box touch nothing else -- on the reasoning
+    that a sliver abutting a covered box might be the edge of something the mesh is
+    hiding, and dropping it would leave a 6px strip of a credential showing. It was
+    redundant, and it kept every artefact it was supposed to be guarding against. On the
+    capture a user reported, four boxes survived the flatness test only because they
+    touched something:
 
-    The tempting alternative -- stop treating a one-directional gradient as ink at all --
-    was rejected. The middle of a capital `I` stroke, and the middle of the `_` in
-    `sk_live_`, also have gradient in only one direction, so that change would have
-    thinned the mask inside real credentials to buy back a cosmetic stripe.
+        (48, 274, 66, 365)   18x91  flat, touching 1   the card's left border
+        (48, 166, 66, 250)   18x84  flat, touching 1   the same border, above it
+        (515, 346, 551, 352) 36x6   flat, touching 2   the input field's underline
+        (108, 346, 138, 352) 30x6   flat, touching 2   more of the same underline
+
+    The redundancy: flatness is already a statement about the pixels *inside* the box. If
+    every row is identical, there is no writing in there to expose, whoever its
+    neighbours are. The sliver-on-the-edge-of-a-credential case cannot be flat, because a
+    glyph edge inside the box is exactly what makes the row means vary. So the flatness
+    test does all the work the isolation test was added for, and does it directly.
     """
     if len(boxes) < 2:
         return list(boxes)
 
     grey = image.convert("L")
-    kept: list[Box] = []
-    for box in boxes:
-        if _is_rule(grey, box) and not any(
-            other is not box and _touches(box, other, cell) for other in boxes
-        ):
-            continue
-        kept.append(box)
-    return kept
+    return [box for box in boxes if not _is_rule(grey, box)]
 
 
 def _is_rule(grey: Image.Image, box: Box, flatness: float = 3.0) -> bool:

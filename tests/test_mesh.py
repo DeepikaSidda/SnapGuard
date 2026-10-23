@@ -371,20 +371,45 @@ def test_an_isolated_panel_border_is_not_covered():
     assert not covering_border, f"the border stripe was covered: {covering_border}"
 
 
-def test_a_sliver_touching_real_content_is_kept():
-    """The safety half. An isolated stripe goes; one abutting covered content stays.
+def test_a_sliver_holding_glyph_pixels_is_kept():
+    """The safety half, and the reason flatness is the right test rather than adjacency.
 
-    Otherwise the rule would shave the leading 6px off a redacted credential.
+    A sliver on the edge of a credential is the case worth protecting: dropping it would
+    leave a few pixels of a key showing. It is protected not by checking what the box
+    touches -- that test was removed for keeping every border on screen -- but because a
+    sliver containing glyph pixels is not flat, and only flat boxes are dropped.
     """
     from aperture.mesh import _drop_rules
 
     img = Image.new("RGB", (500, 300), BACKGROUND)
-    ImageDraw.Draw(img).line([(97, 100), (97, 190)], fill=(90, 90, 100), width=1)
+    # Glyphs, not a line: the left edge of a credential clipped by a region seam.
+    ImageDraw.Draw(img).text((94, 100), "AK\nIA\nWB", font=_font(13),
+                             fill=(206, 145, 120))
 
-    bar = (100, 100, 400, 118)
-    sliver = (94, 100, 100, 190)
+    bar = (110, 100, 400, 118)
+    sliver = (92, 98, 110, 190)
     kept = _drop_rules(img, [bar, sliver], DEFAULT_CELL)
-    assert sliver in kept, "a sliver next to covered content must not be dropped"
+    assert sliver in kept, "a sliver holding glyphs must not be dropped"
+
+
+def test_a_border_is_dropped_even_when_it_touches_something():
+    """Reported twice. The isolation test kept every artefact it was meant to guard.
+
+    On a real capture, the card's left border and the input field's underline both
+    survived purely because they abutted the bar over the key.
+    """
+    from aperture.mesh import _drop_rules
+
+    img = Image.new("RGB", (500, 300), BACKGROUND)
+    d = ImageDraw.Draw(img)
+    d.line([(96, 60), (96, 240)], fill=(90, 90, 100), width=1)       # border
+    d.text((110, 140), "secret=abc123xyz", font=_font(13), fill=(230, 230, 230))
+
+    border = (90, 54, 108, 246)
+    bar = (104, 134, 300, 156)
+    kept = _drop_rules(img, [bar, border], DEFAULT_CELL)
+    assert border not in kept, "a flat border must go whatever it touches"
+    assert bar in kept
 
 
 def test_a_lone_box_is_never_dropped():
