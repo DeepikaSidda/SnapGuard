@@ -55,6 +55,19 @@ DEFAULT_ROWS = 4
 # Tiles overlap slightly so a line of text sitting on a seam is whole in one of them.
 DEFAULT_OVERLAP = 0.06
 
+# No tile shorter than this on either side, whatever grid was asked for.
+#
+# The grid above is sized for a screen. Applied literally to a small image it is absurd:
+# a 320x200 clipboard crop cut 6x4 gives 53x50 tiles, which cost 6 coarse requests plus
+# a fine pass over anything hot -- four minutes, on an image the model could have judged
+# whole in twelve seconds. That happened, on a real clipboard, while a user was waiting
+# to test, and their screenshot sat queued behind it.
+#
+# 140 because the 6x4 grid measured on a 1024x576 screen produces 180x152 tiles and that
+# configuration is the one with evidence behind it; the floor has to sit below it. A
+# 320x200 image comes out 2x1, a 1024x576 stays 6x4, a 1920x1080 stays 6x4.
+MIN_TILE_SIDE = 140
+
 
 @dataclass
 class Tile:
@@ -87,6 +100,25 @@ class Tile:
         return f"tile {self.index} (r{self.row}c{self.column}, {self.width}x{self.height})"
 
 
+def fit_grid(
+    size: tuple[int, int],
+    columns: int,
+    rows: int,
+    *,
+    min_side: int = MIN_TILE_SIDE,
+) -> tuple[int, int]:
+    """Reduce a grid so no tile ends up shorter than `min_side` on either side.
+
+    A grid is a request, not an instruction. Cutting a thumbnail into 24 regions costs
+    24 regions' worth of requests and tells you nothing a single look would not have.
+    """
+    width, height = size
+    return (
+        max(1, min(columns, width // min_side or 1)),
+        max(1, min(rows, height // min_side or 1)),
+    )
+
+
 def tile_grid(
     image: Image.Image,
     *,
@@ -94,12 +126,19 @@ def tile_grid(
     rows: int = DEFAULT_ROWS,
     overlap: float = DEFAULT_OVERLAP,
 ) -> list[Tile]:
-    """Cut `image` into a grid of overlapping tiles, numbered left-to-right, top-down."""
+    """Cut `image` into a grid of overlapping tiles, numbered left-to-right, top-down.
+
+    The grid is reduced to fit small images -- see `fit_grid`. Doing it here rather than
+    at the call sites is deliberate: the gate, the overlay and the agent's buffer all
+    build their tiles through this function, and they have to agree. They did not once,
+    and the result was an explain figure with the credentials still legible in it.
+    """
     if columns < 1 or rows < 1:
         raise ValueError("columns and rows must both be at least 1")
     if not 0.0 <= overlap < 0.5:
         raise ValueError("overlap must be in [0, 0.5)")
 
+    columns, rows = fit_grid(image.size, columns, rows)
     width, height = image.size
     step_x, step_y = width / columns, height / rows
     pad_x, pad_y = step_x * overlap, step_y * overlap
