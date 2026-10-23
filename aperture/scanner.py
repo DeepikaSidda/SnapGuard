@@ -106,8 +106,8 @@ def ocr_available() -> bool:
     return _engine() is not None
 
 
-def read_text_boxes(image: Image.Image) -> list[tuple[str, Box]]:
-    """OCR the image into (text, box) pairs. Empty if OCR is unavailable."""
+def read_text_runs(image: Image.Image) -> list[tuple[str, Box, float]]:
+    """OCR the image into (text, box, confidence) triples."""
     engine = _engine()
     if engine is None:
         return []
@@ -118,14 +118,111 @@ def read_text_boxes(image: Image.Image) -> list[tuple[str, Box]]:
     if not result:
         return []
 
-    out: list[tuple[str, Box]] = []
+    out: list[tuple[str, Box, float]] = []
     for entry in result:
         # rapidocr returns [box_points, text, score]
         points, text = entry[0], entry[1]
+        score = float(entry[2]) if len(entry) > 2 else 0.0
         xs = [int(p[0]) for p in points]
         ys = [int(p[1]) for p in points]
-        out.append((str(text), (min(xs), min(ys), max(xs), max(ys))))
+        out.append((str(text), (min(xs), min(ys), max(xs), max(ys)), score))
     return out
+
+
+def read_text_boxes(image: Image.Image) -> list[tuple[str, Box]]:
+    """OCR the image into (text, box) pairs. Empty if OCR is unavailable."""
+    return [(text, box) for text, box, _ in read_text_runs(image)]
+
+
+def looks_like_ordinary_language(text: str) -> bool:
+    """Is this a label a person wrote, rather than something a generator produced?
+
+    Used to decide which lines inside a flagged region may stay visible. The direction
+    of this test is the whole safety argument, so it is worth being explicit: it is a
+    WHITELIST. A line is revealed only if this returns True. Anything OCR could not read,
+    read with low confidence, or read as something that does not look like language stays
+    covered, which means every new failure mode defaults to covered.
+
+    What it rejects, and why each one matters:
+
+      a long unbroken token          a key, a token, a hash, a URL with a secret in it
+      letters mixed with digits      the shape of nearly every generated credential
+      capitals inside a word         `sk_test_REDACTEDFIXTURE`, `AKIAEXAMPLEKEY`
+      mostly punctuation or symbols  base64 and hex tails
+
+    What it is not: a judgement about whether the *content* is sensitive. "Your team's
+    API key" is revealed because it is a sentence, not because this decided the heading
+    is harmless. A short low-entropy secret -- a four digit PIN, a password like
+    `hunter2` -- reads as ordinary language and WOULD be revealed. That is the real cost
+    of this feature and the reason `--cover-labels` exists to turn it off.
+    """
+    stripped = text.strip()
+    if len(stripped) < 2:
+        return False
+
+    tokens = [t for t in stripped.split() if t]
+    if not tokens:
+        return False
+
+    for token in tokens:
+        core = token.strip(".,:;!?()[]{}<>'\"`|/\\-_=+*%&#@~^·•")
+        if not core:
+            continue
+
+        letters = sum(c.isalpha() for c in core)
+        digits = sum(c.isdigit() for c in core)
+
+        # Plain numbers, including thousands separators and decimals, are fine.
+        if not letters and core.replace(",", "").replace(".", "").isdigit():
+            continue
+
+        if len(core) > 14:
+            return False
+        if letters and digits and len(core) > 5:
+            return False
+        if letters / len(core) < 0.6:
+            return False
+
+        # Scattered capitals, which is the shape of `wJalrXUtnFEMI`. Counted rather than
+        # merely detected, because two earlier versions of this rule were both wrong:
+        #
+        #   "any capital after the first" rejected `GitHub`, `PayPal` and `macOS`, so
+        #   the sentence "don't commit it to GitHub" was covered as a suspected secret.
+        #
+        #   adding an exemption for short tokens did not help either, because the thing
+        #   being measured was never length. `API` misread by OCR as `APl` has one
+        #   stray capital; a key has seven.
+        #
+        # So: up to two capitals outside the first position is a product name, more is
+        # entropy. Everything longer is already rejected above -- over 14 characters by
+        # length, letters mixed with digits by the second test, base64 and hex tails by
+        # the third -- so this only has to separate CamelCase words from key material.
+        strays = sum(1 for c in core[1:] if c.isupper())
+        if strays > 2 and core != core.upper():
+            return False
+
+    return True
+
+
+def ordinary_language_boxes(
+    image: Image.Image,
+    *,
+    min_confidence: float = 0.60,
+) -> list[Box]:
+    """Boxes of the text lines that may be left visible inside a flagged region.
+
+    The box is OCR's own, untrimmed. An earlier version pulled each one in by two pixels
+    on the theory that a box overhanging into the next line would leave two pixels of a
+    credential showing. It backfired: the consumer suppresses ink inside these boxes, so
+    trimming left a two-pixel ring of every label's glyphs outside the box, still inked,
+    which was enough to rebuild a bar over the whole line. Trimming made labels *more*
+    covered, not less. The slack belongs at the other end -- see `mesh.ink_mask`.
+    """
+    return [
+        box
+        for text, box, score in read_text_runs(image)
+        if score >= min_confidence and looks_like_ordinary_language(text)
+    ]
 
 
 # --------------------------------------------------------------------------- the scan

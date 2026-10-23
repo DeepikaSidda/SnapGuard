@@ -112,7 +112,9 @@ def cmd_check(args: argparse.Namespace) -> int:
         else:
             # The mesh: keep the model's regions, drop the blank parts of them. No model
             # call, no OCR, and no claim about which text is sensitive -- see mesh.py.
-            meshed, shrunk = tighten_all(image, boxes, enabled=args.mesh)
+            meshed, shrunk = tighten_all(
+                image, boxes, enabled=args.mesh, reveal_labels=args.reveal_labels
+            )
         redaction = redact(image, meshed, mode=args.mode)
         redaction.image.save(args.out)
         if shrunk < 1.0:
@@ -221,6 +223,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
             decider_url=args.decider_url,
             minutes=args.for_minutes,
             mesh=args.mesh,
+            reveal_labels=args.reveal_labels,
             columns=args.columns,
             rows=args.rows,
             mode=args.mode,
@@ -232,6 +235,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
         decider_url=args.decider_url,
         minutes=args.for_minutes,
         mesh=args.mesh,
+        reveal_labels=args.reveal_labels,
         columns=args.columns,
         rows=args.rows,
         mode=args.mode,
@@ -358,7 +362,14 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--no-mesh", dest="mesh", action="store_false",
                        help="paint flagged regions as whole rectangles instead of "
                             "meshing them down to the parts that are not blank")
-    check.set_defaults(func=cmd_check, ocr=True, mesh=True)
+    check.add_argument("--cover-labels", dest="reveal_labels", action="store_false",
+                       help="also cover text that reads as ordinary language. By "
+                            "default a heading like \"Your team's API key\" is left "
+                            "visible and only the key under it is painted; this covers "
+                            "both. Use it if a short low-entropy secret (a PIN, a "
+                            "simple password) might be on screen, since those read as "
+                            "ordinary language")
+    check.set_defaults(func=cmd_check, ocr=True, mesh=True, reveal_labels=True)
 
     ask = sub.add_parser("ask", help="run the agent against a screen")
     ask.add_argument("question")
@@ -400,7 +411,11 @@ def build_parser() -> argparse.ArgumentParser:
     guard.add_argument("--no-mesh", dest="mesh", action="store_false",
                        help="paint flagged regions as whole rectangles instead of "
                             "meshing them down to the parts that are not blank")
-    guard.set_defaults(func=cmd_guard, ocr=True, notify=True, mesh=True)
+    guard.add_argument("--cover-labels", dest="reveal_labels", action="store_false",
+                       help="also cover text that reads as ordinary language, instead "
+                            "of leaving headings and prose visible")
+    guard.set_defaults(func=cmd_guard, ocr=True, notify=True, mesh=True,
+                       reveal_labels=True)
 
     vault = sub.add_parser("vault", help="inspect or empty the quarantine folder")
     vault.add_argument("--path", default=None,

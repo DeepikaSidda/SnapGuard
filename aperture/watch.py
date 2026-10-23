@@ -212,6 +212,7 @@ def guard_clipboard(
     decider_url: str | None = None,
     minutes: int = 0,
     mesh: bool = True,
+    reveal_labels: bool = True,
     columns: int = 6,
     rows: int = 4,
     mode: str = "block",
@@ -371,7 +372,7 @@ def guard_clipboard(
                 # in an editor pane costs a bar, not the pane. Pixel arithmetic, no
                 # model call, and it makes no guess about which text is sensitive, which
                 # is what separates it from the regex-narrowing that was reverted.
-                meshed, shrunk = tighten_all(image, boxes, enabled=mesh)
+                meshed, shrunk = tighten_all(image, boxes, enabled=mesh, reveal_labels=reveal_labels)
                 if shrunk < 1.0:
                     stamped(f"mesh      kept {shrunk:.0%} of the flagged area, "
                             f"{len(boxes)} region(s) -> {len(meshed)} boxes")
@@ -492,6 +493,7 @@ def guard_folders(
     decider_url: str | None = None,
     minutes: int = 0,
     mesh: bool = True,
+    reveal_labels: bool = True,
     columns: int = 6,
     rows: int = 4,
     mode: str = "block",
@@ -614,7 +616,7 @@ def guard_folders(
                     elif boxes:
                         tally.redacted += 1
                         # Keep the regions, drop their blank parts. See mesh.py.
-                        boxes, shrunk = tighten_all(image, boxes, enabled=mesh)
+                        boxes, shrunk = tighten_all(image, boxes, enabled=mesh, reveal_labels=reveal_labels)
                         if shrunk < 1.0:
                             stamped(f"mesh      kept {shrunk:.0%} of the flagged area")
                     else:

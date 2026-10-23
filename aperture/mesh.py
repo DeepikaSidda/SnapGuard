@@ -125,18 +125,28 @@ PTP_FLOOR = 70.0
 # leave an island of background between two covered runs.
 MAX_FRACTION = 0.72
 
+# How far outside its OCR box a revealed line is flattened. See `_pixel_mask`.
+REVEAL_PAD = 2
+
 
 def ink_mask(
     image: Image.Image,
     box: Box,
     *,
     cell: int = DEFAULT_CELL,
+    reveal: Sequence[Box] = (),
 ) -> tuple[np.ndarray, int, int]:
     """Which `cell`-sized squares of `box` contain anything other than background.
 
     Returns the boolean mask and its shape, in cells. Dilated by one cell in every
     direction, so a glyph whose anti-aliased edge spills into the next square does not
     leave a sliver of itself visible.
+
+    `reveal` are boxes of text lines that may stay visible -- see
+    `scanner.ordinary_language_boxes`. A cell is excused only if it sits ENTIRELY inside
+    one of them, and the exclusion happens before dilation, so a covered glyph's halo
+    still spreads over the edge of a revealed label rather than the other way round.
+    Both choices are the same choice: when in doubt, cover.
     """
     left, top, right, bottom = box
     crop = image.convert("L").crop((left, top, right, bottom))
@@ -167,12 +177,51 @@ def ink_mask(
         gradient[:-1, :], np.abs(np.diff(padded, axis=0)), out=gradient[:-1, :]
     )
 
+    if len(reveal):
+        # Flatten the revealed lines out of both measures, at PIXEL resolution.
+        #
+        # The first version of this excused whole cells, and only cells lying entirely
+        # within an OCR box. At a 6px cell a 16px line of text has one or two such rows
+        # and its remaining rows stayed inked, so every "revealed" label got a bar drawn
+        # over it anyway. Suppressing pixels instead means a cell straddling a label and
+        # a key still fires -- from the key's half, which is the half that matters.
+        keep = _pixel_mask(reveal, (left, top), padded.shape, pad=REVEAL_PAD)
+        gradient[keep] = 0.0
+        padded = np.where(keep, float(np.median(padded)), padded)
+
     values = per_cell(padded)
     inked = (per_cell(gradient).max(axis=2) >= GRADIENT_FLOOR) | (
         values.max(axis=2) - values.min(axis=2) >= PTP_FLOOR
     )
 
     return _dilate(inked), rows, columns
+
+
+def _pixel_mask(
+    reveal: Sequence[Box],
+    origin: tuple[int, int],
+    shape: tuple[int, int],
+    *,
+    pad: int,
+) -> np.ndarray:
+    """Pixels belonging to a revealed line, in the cropped frame's coordinates.
+
+    `pad` grows each box outward. OCR boxes hug the glyphs, and the outermost pixels of
+    an anti-aliased glyph sit just beyond the box -- enough gradient to rebuild a bar
+    over the line the box was meant to reveal. Growing by 2px costs, at worst, two
+    pixels off the top of whatever is on the next line, which is not legible.
+    """
+    offset_x, offset_y = origin
+    height, width = shape
+    keep = np.zeros(shape, dtype=bool)
+    for left, top, right, bottom in reveal:
+        x0 = max(0, left - offset_x - pad)
+        y0 = max(0, top - offset_y - pad)
+        x1 = min(width, right - offset_x + pad)
+        y1 = min(height, bottom - offset_y + pad)
+        if x1 > x0 and y1 > y0:
+            keep[y0:y1, x0:x1] = True
+    return keep
 
 
 def _dilate(mask: np.ndarray) -> np.ndarray:
@@ -206,6 +255,7 @@ def tighten(
     *,
     cell: int = DEFAULT_CELL,
     max_fraction: float = MAX_FRACTION,
+    reveal: Sequence[Box] = (),
 ) -> list[Box]:
     """Replace one flagged region with the parts of it that are not blank.
 
@@ -216,14 +266,48 @@ def tighten(
     if right - left < cell * 2 or bottom - top < cell * 2:
         return [box]
 
-    mask, rows, columns = ink_mask(image, box, cell=cell)
-    if mask.size == 0:
+    # Two masks: everything that is here, and that minus the lines allowed to stay.
+    raw, rows, columns = ink_mask(image, box, cell=cell)
+    if raw.size == 0 or not raw.any():
+        # Nothing visible at all. Not an invitation to reveal the region -- the mesh
+        # simply has nothing to say, so defer to the region the model judged.
         return [box]
 
-    inked = int(mask.sum())
-    if inked == 0 or inked / mask.size > max_fraction:
-        # Nothing found, or nearly everything found. Either way the honest answer is the
-        # region the model actually judged.
+    mask = raw
+    if len(reveal):
+        mask, _, _ = ink_mask(image, box, cell=cell, reveal=reveal)
+        if not mask.any():
+            # Every inked pixel in this region belongs to a line OCR read confidently as
+            # ordinary language. Nothing is covered here.
+            #
+            # Two other answers were tried first and both were worse. Returning `[box]`
+            # painted the region whole, which took the demo fixture from 3.6% of the
+            # frame to 11.2% -- revealing nothing is not the same as covering
+            # everything. Falling back to the unrevealed ink covered the tail of an
+            # English sentence that happened to be the only thing in two regions, which
+            # is the complaint this feature exists to answer.
+            #
+            # Why this is safe despite the model having flagged the region: the region
+            # verdict does not locate anything, and the per-line reading is the more
+            # specific evidence about what text is actually there. More importantly, a
+            # secret OCR CANNOT read is not inside any revealed box, so it stays
+            # covered -- which is the case that matters, because OCR missed this user's
+            # real AWS keys twice while the model caught them both times. What this
+            # does risk is a short, low-entropy secret that reads as language, and that
+            # is the documented cost of the whole feature. `--cover-labels` turns it
+            # off.
+            return []
+
+    # The density ceiling, judged on what would actually be painted.
+    #
+    # Measuring `raw` here instead was tried for one build and is wrong in a way worth
+    # recording: a cream panel with borders and a full-width input box is dense before
+    # its labels are excused and sparse afterwards, so testing the pre-exclusion mask
+    # disabled meshing on precisely the regions where revealing labels helps most. The
+    # user's heading came back covered and the frame went from 7.6% to 10.5%. The
+    # question this ceiling asks is "would a mesh here be a comb of bars with hairlines
+    # between them", and only the final mask can answer it.
+    if int(mask.sum()) / mask.size > max_fraction:
         return [box]
 
     # Merge runs of inked cells along each row. Row-runs rather than arbitrary
@@ -263,7 +347,9 @@ def _merge_vertically(boxes: Sequence[Box]) -> list[Box]:
     return merged
 
 
-def join_adjacent(boxes: Sequence[Box], *, overlap: float = 0.6) -> list[Box]:
+def join_adjacent(
+    boxes: Sequence[Box], *, overlap: float = 0.6, bridge: int = DEFAULT_CELL
+) -> list[Box]:
     """Fuse bars that meet, so a line of text crossing a region seam is one box.
 
     Regions overlap by 6% by design, and a line of credentials wide enough to span two
@@ -274,6 +360,11 @@ def join_adjacent(boxes: Sequence[Box], *, overlap: float = 0.6) -> list[Box]:
     Only boxes that already touch are fused, and the result always contains both, so
     this can only ever cover more. `overlap` is how much of the shorter box's height
     has to be shared before two bars are considered the same line.
+
+    `bridge` is how wide a gap may be closed, and it must be 0 whenever labels are being
+    revealed. A tidying pass that is allowed to span a small gap will happily span the
+    gap left by a revealed heading and cover it again, which is how "keep the label
+    visible" quietly became "keep nothing visible" the first time this ran.
     """
     out = [tuple(b) for b in boxes]
     changed = True
@@ -281,7 +372,7 @@ def join_adjacent(boxes: Sequence[Box], *, overlap: float = 0.6) -> list[Box]:
         changed = False
         for i in range(len(out)):
             for j in range(i + 1, len(out)):
-                fused = _fuse(out[i], out[j], overlap)
+                fused = _fuse(out[i], out[j], overlap, bridge)
                 if fused is not None:
                     out[i] = fused
                     del out[j]
@@ -292,18 +383,35 @@ def join_adjacent(boxes: Sequence[Box], *, overlap: float = 0.6) -> list[Box]:
     return [tuple(b) for b in out]  # type: ignore[misc]
 
 
-def _fuse(a: Box, b: Box, overlap: float) -> Box | None:
+def _fuse(a: Box, b: Box, overlap: float, bridge: int) -> Box | None:
     """The union of `a` and `b` if they are the same line of content, else None."""
     shared = min(a[3], b[3]) - max(a[1], b[1])
     shorter = min(a[3] - a[1], b[3] - b[1])
     if shorter <= 0 or shared / shorter < overlap:
         return None
-    # Horizontally touching or overlapping. One cell of slack, so two bars separated by
-    # a single blank square still join rather than leaving a hairline of screen showing
-    # between two redactions.
-    if min(a[2], b[2]) + DEFAULT_CELL < max(a[0], b[0]):
+    # Horizontally touching or overlapping, plus `bridge` pixels of slack so two bars
+    # separated by a hairline of background join rather than showing a seam.
+    if min(a[2], b[2]) + bridge < max(a[0], b[0]):
         return None
-    return (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
+
+    union = (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
+
+    # A fusion may not invent area. Without this, the pass cascades: fusing by bounding
+    # box makes the result taller than either input, the taller box then overlaps bars
+    # on neighbouring lines, those fuse too, and it runs away. Measured on a light page
+    # with 22 tight bars covering 2.8% of the frame, the tidying pass alone collapsed
+    # them into 2 boxes covering 10.5% -- four times the damage, from a step whose only
+    # purpose was to avoid drawing two borders where one would do.
+    #
+    # Allowing a tenth lets genuinely adjacent bars whose edges differ by a pixel or two
+    # merge, and stops anything else.
+    if _box_area(union) > (_box_area(a) + _box_area(b)) * 1.1:
+        return None
+    return union
+
+
+def _box_area(box: Box) -> int:
+    return max(0, box[2] - box[0]) * max(0, box[3] - box[1])
 
 
 def extend_along_ink(
@@ -312,6 +420,7 @@ def extend_along_ink(
     *,
     cell: int = DEFAULT_CELL,
     gap: int = 3,
+    reveal: Sequence[Box] = (),
 ) -> list[Box]:
     """Grow each bar sideways while the line of content it sits on keeps going.
 
@@ -337,7 +446,9 @@ def extend_along_ink(
     if not boxes:
         return []
 
-    mask, rows, columns = ink_mask(image, (0, 0, image.width, image.height), cell=cell)
+    mask, rows, columns = ink_mask(
+        image, (0, 0, image.width, image.height), cell=cell, reveal=reveal
+    )
     if mask.size == 0:
         return list(boxes)
 
@@ -384,20 +495,49 @@ def tighten_all(
     *,
     cell: int = DEFAULT_CELL,
     enabled: bool = True,
+    reveal_labels: bool = True,
 ) -> tuple[list[Box], float]:
     """Mesh every flagged region, and report how much of the original area survived.
 
     The ratio is worth logging: it is the one number that tells a user whether the thing
     they complained about actually got better on their screen rather than on a fixture.
+
+    With `reveal_labels`, text lines that OCR read confidently as ordinary language are
+    left visible, so a heading like "Your team's API key" survives while the key below it
+    does not. This is the one place in the project where something is deliberately NOT
+    covered inside a region the model flagged, so the reasoning is worth stating:
+
+      * it is a whitelist. A line is revealed only on a positive, confident reading that
+        looks like language. Unread, low-confidence, and unlike-language all stay
+        covered, so every failure of the OCR or of the test defaults to covered.
+      * it does not try to decide which text is sensitive. That is the mistake this
+        project already made -- narrowing to the regex scanner's matched box left three
+        credentials legible. This asks a different question with a safe default.
+      * the cost is real: a short, low-entropy secret reads as ordinary language. A four
+        digit PIN or a password like `hunter2` would be revealed. `--cover-labels` turns
+        this off, and anything the model flagged is then covered whole.
     """
     if not enabled or not boxes:
         return list(boxes), 1.0
 
+    reveal: list[Box] = []
+    if reveal_labels:
+        from .scanner import ordinary_language_boxes
+
+        reveal = ordinary_language_boxes(image)
+
     out: list[Box] = []
     for box in boxes:
-        out.extend(tighten(image, box, cell=cell))
-    out = extend_along_ink(image, out, cell=cell)
-    out = join_adjacent(out)
+        out.extend(tighten(image, box, cell=cell, reveal=reveal))
+
+    if not out:
+        # Revealing a region is one thing; revealing the entire screen on the strength
+        # of an OCR reading is another. If nothing at all survived, the model's regions
+        # are restored. Bounds the blast radius of every judgement made in this module.
+        return list(boxes), 1.0
+
+    out = extend_along_ink(image, out, cell=cell, reveal=reveal)
+    out = join_adjacent(out, bridge=0 if reveal else cell)
 
     # Union area, not a sum of areas: the regions this started from overlap by 6%, so
     # summing would compare an inflated "after" against an inflated "before" and the
