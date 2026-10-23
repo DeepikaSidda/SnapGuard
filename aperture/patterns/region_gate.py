@@ -286,7 +286,7 @@ class RegionGate:
         # more requests for each one. One such screen in the eval set ran for thirteen
         # minutes before this was turned off.
         #
-        # Kept, because it is the right tool on a large display where even a 6x4 region
+        # Kept, because it is the right tool on a large display where even a 4x3 region
         # is big, and exposed as `aperture --precise`. The lesson is the ordering: make
         # the regions small first, and only then narrow the ones that fire.
         refine_flagged: bool = False,
@@ -316,16 +316,26 @@ class RegionGate:
         # Asked per region so a verdict is never recorded about an unreadable smear.
         # `looks_blank` catches a solid colour cheaply; this catches the subtler case.
         legibility: Rule | None = None,
-        # 6x4, wider than tall because screens are. This started at 2x2 -- which lets
-        # the coarse pass screen a whole frame in one request -- and a user reported,
-        # three times, that the redaction covered too much. They were right, and their
-        # own diagnosis was the fix: use small regions rather than large ones and then
-        # try to narrow them. A 6x4 grid of a 1080p screen gives 320x270 tiles, which
-        # the server does not downscale at all, and makes one hit 4% of the display
-        # instead of 25%. Measured: 15% of the reported screen covered against 24% for
-        # 2x2-plus-refinement, at the same 11 local requests. See tiling.py.
-        columns: int = 6,
-        rows: int = 4,
+        # 4x3, wider than tall because screens are. This has moved twice and the two
+        # moves are worth reading together, because the second one undoes the premise of
+        # the first.
+        #
+        # It started at 2x2, and a user reported three times that the redaction covered
+        # too much. Correct: a flagged region *was* the redaction, so a quarter-screen
+        # region meant a quarter-screen black box. The fix was finer regions, and 6x4
+        # took the reported case from 24% of the screen to 15%.
+        #
+        # Then `mesh.tighten_all` arrived and reduced a flagged region to the cells
+        # actually holding ink. That silently removed the entire reason the grid was
+        # fine, and nobody noticed for a day: tightness is now set by the mesh at pixel
+        # resolution, and the grid only governs the request count. Measured on the dark
+        # editor, coverage is flat at 3.25%-3.38% across every grid from 2x2 to 6x4
+        # while the time triples.
+        #
+        # So 4x3, which is 40% faster than 6x4 on the capture a user actually reported.
+        # The full table is in tiling.py.
+        columns: int = 4,
+        rows: int = 3,
         state: str = "A region of a screen captured on a computer.",
         context_state: str = "A screenshot of an application window on a computer.",
         # Full resolution, and it stays that way. Two attempts to shrink images for
@@ -523,7 +533,7 @@ class RegionGate:
         one secret of four. See `redact.resolve_boxes`.
 
         The real fix was the grid itself, and the user said so: small regions beat large
-        regions that are narrowed afterwards. The default is 6x4 now. This pass remains
+        regions that are narrowed afterwards. The default is 4x3. This pass remains
         for the case the grid cannot cover, a region that is large because the display
         is -- ask the model again, smaller. Subdivide the flagged region
         and re-test only the rules that actually fired. Sub-regions that fire give a box
@@ -564,7 +574,7 @@ class RegionGate:
         below that the model is being asked about a smear. Note that the size test is on
         the pieces this call would create, not on the region it was handed: testing the
         parent lets through exactly one round of questions about smears, which at the
-        6x4 default grid is every round.
+        default grid is every round.
         """
         left, top = offset_box[0], offset_box[1]
         width, height = image.size

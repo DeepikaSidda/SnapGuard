@@ -359,8 +359,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--decider-url", default=None,
                         help="default http://127.0.0.1:8099")
-    parser.add_argument("--columns", type=int, default=6, help="region grid columns")
-    parser.add_argument("--rows", type=int, default=4, help="region grid rows")
+    parser.add_argument("--columns", type=int, default=4, help="region grid columns")
+    parser.add_argument("--rows", type=int, default=3, help="region grid rows")
     sub = parser.add_subparsers(dest="command", required=True)
 
     check = sub.add_parser("check", help="inspect one image")

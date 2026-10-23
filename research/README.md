@@ -1160,3 +1160,66 @@ heading, cover the key" behaviour marginally worse while fixing nothing.
 
 The measurement took four minutes. Building it would have taken half an hour and shipped
 a change with no effect and a small regression in it.
+
+---
+
+## 18. The mesh made the grid pointless, and nobody noticed for a day
+
+A user asked twice for the scan to be faster. Two to four minutes a screenshot is not a
+product, and the whole bill is local requests: one context pass plus `ceil(regions / 4)`
+coarse batches, plus a fine pass on whatever comes back hot. At 6x4 that is 7 calls on a
+clean screen and 15–18 on a dirty one, at roughly 12s each on this CPU.
+
+The reason the grid was fine is in section 13: **a flagged region was the redaction**, so
+small regions meant small redactions. Then section 14 added the mesh, which reduces a
+flagged region to the cells holding ink at pixel resolution — and that removed the entire
+premise. Tightness has been set by the mesh, not the grid, since the moment it shipped.
+The grid kept costing requests for a benefit it had stopped providing.
+
+### Measured, with the mesh on, on two real captures
+
+| | light capture | | | dark editor | | |
+|---|---|---|---|---|---|---|
+| grid | calls | time | covered | calls | time | covered |
+| 2x2 | 6 | 65s | 8.73% | 6 | 73s | 3.26% |
+| 3x2 | 7 | 88s | 8.72% | 7 | 103s | 3.25% |
+| **4x3** | **8** | **121s** | **2.38%** | **11** | **192s** | **3.37%** |
+| 6x4 | 15 | 201s | 1.65% | 18 | 216s | 3.38% |
+
+No leak at any grid; the control string stayed readable in all eight runs.
+
+**On the dark editor the coverage is flat — 3.25% to 3.38% — while the time triples.**
+Three times the requests, for a thirteen-thousandth of the screen. That is the mesh doing
+all the work and the grid buying nothing at all.
+
+The light capture is the only case where fineness still pays, and the reason is not the
+grid, it is the OCR: a coarse region there traps a lot of prose, and the label whitelist
+needs rapidocr to read that prose confidently before it can leave it visible. It cannot,
+at that scale (§17). So the grid is compensating for a weak recogniser, which is the same
+root cause as §15.
+
+### Shipped 4x3
+
+40% faster than 6x4 on the capture a user actually reported — 201s to 121s — at 2.38%
+covered against 1.65%, and no worse than 6x4 anywhere measured. `--columns 2 --rows 2` is
+three times faster again for anyone who can live with 8.7% on a light page.
+
+### The lesson, which is not about grids
+
+This is the second time in two days that a measured decision was invalidated by a later
+change rather than by being wrong:
+
+| | decided because | invalidated when |
+|---|---|---|
+| §15 | the scanner found 1 secret of 4, so precise boxes are unsafe | a better OCR found 4 of 4 |
+| §18 | a region is the redaction, so regions must be small | the mesh made the redaction sub-region |
+
+Both decisions were correct when made, documented with numbers, and became wrong without
+anybody touching them. The comment next to each one explained *why* so convincingly that
+it stopped being read as a question. A measurement is only valid alongside the assumptions
+it was taken under, and nothing in this repository records those assumptions in a form
+that notices when they change.
+
+Four coverage numbers had to be re-measured to find this one. The cheap version of the
+same check — "which earlier decisions had their premise removed by what I just shipped?"
+— would have found it in a minute, and is the thing I did not do.

@@ -26,31 +26,50 @@ from PIL import Image
 
 from .decider import IMAGE_LONG_SIDE, MAX_IMAGES_PER_REQUEST
 
-# 6x4 is the default, and it is wider than it is tall on purpose: screens are 16:9, so
-# six columns by four rows gives roughly square tiles (320x270 on a 1080p display)
-# rather than the letterbox strips a square grid would cut. Two things follow from
-# tiles that size:
+# 4x3, wider than it is tall on purpose: screens are 16:9, so more columns than rows
+# gives roughly square tiles rather than the letterbox strips a square grid would cut.
 #
-#   Nothing is thrown away. 320x270 is already under the server's 448px long side, so
-#   the tile arrives at full resolution -- downscale 1.0x, against 2.1x for a 2x2 grid.
+# This was 6x4 for a day, chosen when a flagged region WAS the redaction, so small
+# regions meant small redactions. `mesh.tighten_all` removed that reason -- it reduces a
+# flagged region to the cells holding ink, at pixel resolution -- and the grid stopped
+# controlling tightness without anybody noticing. What it still controls is the request
+# count, which is the entire latency bill, and a user asked twice for the scan to be
+# faster. Measured, with the mesh on, on two real captures:
 #
-#   A hit is small. One of 24 regions is 4% of the display, so covering a credential
-#   costs a thumbnail-sized box instead of a quarter of the screen.
+#            light capture            dark editor
+#   grid     calls  time  covered     calls  time  covered
+#   2x2          6   65s    8.73%         6   73s    3.26%
+#   3x2          7   88s    8.72%         7  103s    3.25%
+#   4x3          8  121s    2.38%        11  192s    3.37%     <- this
+#   6x4         15  201s    1.65%        18  216s    3.38%
 #
-# The cost is requests, and less than it looks: the coarse pass screens four regions
-# per request, so 24 regions is six requests, and the fine pass only runs on the
-# batches that come back hot. Measured against the alternatives on the case a user
-# reported, with the covered area as the thing to minimise:
+# On the dark editor coverage is flat across every grid -- 3.25% to 3.38% -- while time
+# triples, which is the mesh doing all the work and the grid buying nothing. The light
+# capture is the only case where a finer grid helps, because a coarse region there traps
+# prose that the local OCR is too weak to whitelist, and 8.7% of a screen was the
+# original complaint.
 #
-#   2x2 + refinement   24% covered   11 calls      <- the previous default
-#   3x3                26% covered    7 calls
-#   4x4                22% covered    9 calls
-#   6x4                15% covered   11 calls      <- this
+# So 4x3: 40% faster than 6x4 on the case a user actually reported, at 2.38% against
+# 1.65%, and no worse anywhere measured. `--columns 2 --rows 2` is three times faster
+# again if you can live with the light-page number.
 #
-# Same request count as the old default, a third less of the screen covered, and no
-# leak in any of them. See research/README.md section 13.
-DEFAULT_COLUMNS = 6
-DEFAULT_ROWS = 4
+# Two things that still follow from tiles this size:
+#
+#   Nothing is thrown away. A 4x3 tile of a 1080p screen is 480x360, which the server
+#   downscales 1.1x -- effectively nothing, against 2.1x for a 2x2 grid. Past about 3x3
+#   the grid stops being a cost/accuracy trade and becomes free accuracy; see section 13.
+#
+#   A hit is bounded. One of 12 regions is 8% of the display, and the mesh then reduces
+#   that to the parts of it holding ink.
+#
+# The cost is requests, and less than it looks: the coarse pass screens four regions per
+# request, so 12 regions is three requests, and the fine pass only runs on the batches
+# that come back hot. A clean screen is 4 calls.
+#
+# See research/README.md sections 13 and 18 for the full history -- the earlier
+# measurement that moved this from 2x2, and the later one that moved it back down.
+DEFAULT_COLUMNS = 4
+DEFAULT_ROWS = 3
 
 # Tiles overlap slightly so a line of text sitting on a seam is whole in one of them.
 DEFAULT_OVERLAP = 0.06
