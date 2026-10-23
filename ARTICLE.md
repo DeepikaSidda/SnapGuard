@@ -361,20 +361,73 @@ Strands Decider 2B   credential = 0.900, 0.568  -> redacted 56% of the frame
 
 (Those coverage figures are from the runs as they happened, on a 2×2 region grid. A user
 looked at the second one and said what you are probably thinking — 56% of my screen gone
-to hide one line. That took three rounds to fix properly and the default grid is 6×4 now,
-which puts the same captures around 15%. The story is further down.)
+to hide one line. That took four rounds to fix properly; the same captures now come out
+around 2%. The story is further down.)
 
-I still don't know exactly why. Either the OCR is mangling characters at that font size,
-or my keys sit in a format none of my thirteen patterns cover. Either way the lesson is
-the same, and it isn't the one I set out to write: the deterministic lane is a useful
-accelerator when it fires, and it is not a safety net. The model is the safety net.
+I wrote, at this point: *"I still don't know exactly why. Either the OCR is mangling
+characters at that font size, or my keys sit in a format none of my thirteen patterns
+cover."* And then I drew a conclusion from it — that the deterministic lane is not a
+safety net, the model is.
 
-I've left the fast lane in, because when it *does* fire it gives exact pixel coordinates
-in under a second and cuts the gate from six local decisions to three. But I had the roles
-backwards. Code is the optimisation. Decider is the thing that actually catches it.
+### I was wrong, and the way I found out is the better story
 
-That was the most useful hour of this build — being wrong about my own architecture, on my
-own data, with numbers to prove it.
+A week later a user said the tool still wasn't finding their keys, and asked why I wasn't
+using an AWS service to read the screen. So I put the same capture through **Amazon
+Textract**:
+
+```
+textract   : 147 words, 34 lines in 3517ms
+  57 chars  conf 55.1  'dcd_live_5M0...4Jie0H'
+my own regexes, on Textract's text: ['decider_api_key']
+```
+
+**My pattern matched it on the first try.** It had always been able to. The regexes were
+being handed an empty string by an OCR engine that cannot read 8px text, and then blamed
+for not finding anything in it. The first of my two hypotheses was right and I had
+stopped investigating one `boto3` call short of knowing which.
+
+So the honest lesson is not "code loses to models". It is narrower and more useful:
+
+> I measured a pipeline and attributed the failure to the wrong stage of it.
+
+The regex layer had no defect. The *input* to it did. And "the model beat my code" is a
+much more satisfying story than "my OCR was bad", which is probably why I believed it.
+
+What this fixed, with **Amazon Comprehend** naming the spans Textract read:
+
+| | secrets precisely located |
+|---|---|
+| local OCR + 13 regexes | 0, 0, **1 of 4** |
+| Textract + the same 13 regexes + Comprehend | 2, 2, **4 of 4** |
+
+That 1-of-4 matters more than it looks. Early on I tried covering only the scanner's
+exact box instead of the whole region it sat in, and shipped a screenshot with three
+credentials still legible — because the scanner had found one secret of four. That
+failure is the reason this tool covered regions instead of words, and the reason it
+covered too much. It was never a safe-design argument. It was a bad-OCR argument wearing
+one.
+
+### Which does not make this a cloud tool
+
+Textract gets the whole screenshot, credentials and all. That is the exact opposite of
+what this project is for, so the lane is opt-in behind `--aws-lane` and off by default.
+It is coherent under a different threat model — *I trust my own AWS account; I do not
+trust the third-party AI I am pasting into* — and that is a common one. It is not
+coherent under the strict one, which is the default.
+
+And the division of labour is the thing I would keep:
+
+```
+recognition   Textract + Comprehend   what is on screen, and exactly where
+decision      Strands Decider 2B      whether it may leave, and whether it is wanted
+```
+
+Comprehend cannot make the decision, and the first capture I ran showed why: it labelled
+**"Madurai" an ADDRESS at 0.67** — part of the phrase "AWS User Group Madurai". The same
+over-flagging both Nova models showed on my eval set. "Is this a private conversation",
+"is this an identity document", "does this region bear on what the user asked" are not
+entity-extraction questions. Those stay with Decider, which is the only component here
+that returns a calibrated number about a *judgement* rather than a lookup.
 
 The model earns its place on the judgements no regex can make. That's the honest split,
 and it's the one that makes the fast path fast enough for the clipboard guard to hold your

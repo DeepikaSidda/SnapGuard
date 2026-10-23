@@ -874,3 +874,137 @@ The `--explain` overlay still blurs flagged regions whole, because it is a pictu
 *region-level* decisions and meshing it would hide what the model actually said. The
 redaction and the diagram of the redaction are now deliberately different granularities,
 which is worth knowing before comparing the two images.
+
+---
+
+## 15. Amazon Textract and Comprehend, and the measurement I got wrong
+
+A user said the tool was still not finding their keys reliably, and asked why an AWS
+service was not doing the recognition. The answer turned out to invalidate a headline
+claim of this project.
+
+### The claim
+
+Section 8 is titled *"The prediction that failed: regex did not beat the model"*. Its
+evidence: on two real captures of live AWS keys, OCR plus thirteen regexes matched
+**nothing** while the 2B model caught both. The write-up hedged on the cause — "either
+the OCR is mangling characters at that font size, or my keys sit in a format none of my
+thirteen patterns cover" — and then drew a conclusion anyway.
+
+### One API call away from the answer
+
+Same capture, through `DetectDocumentText`:
+
+```
+textract   : 147 words, 34 lines in 3517ms
+  longest tokens it read:
+     57 chars  conf 55.1  'dcd_live_5M0...4Jie0H'
+     12 chars  conf 99.5  'Achievements'
+     10 chars  conf 100.0 'Everything'
+our regexes on Textract's text: ['decider_api_key']
+```
+
+**The existing pattern matched immediately.** The regex layer never had a defect; the OCR
+feeding it did. The first hypothesis was correct and the investigation stopped one
+`boto3` call short of distinguishing them.
+
+Note the confidence column, because it is the explanation: every ordinary word came back
+above 99% and the credential came back at **55.1%**. Even Textract finds a random
+57-character token hard to read. rapidocr returned nothing at all.
+
+The relevant hard limit, which should have been the first thing checked:
+
+> Textract's minimum detectable text height is 15 pixels.
+> — [AWS documentation](https://docs.aws.amazon.com/textract/latest/dg/limits-document.html)
+
+The capture that failed had ~8px text. `aws_lane.py` now scales an image up until the
+estimated text height clears that floor — 1.95x, 3.43x and 1.5x on the three captures
+tested. Almost certainly the same reason the local OCR failed, and it means section 8's
+conclusion was an artefact of capture scale.
+
+### What it costs to have been wrong about this
+
+| | secrets precisely located |
+|---|---|
+| local OCR + 13 regexes | 0, 0, **1 of 4** |
+| Textract + the same 13 regexes + Comprehend | 2, 2, **4 of 4** |
+
+The 1-of-4 is the expensive one. Section 14 and `redact.resolve_boxes` both rest on a
+failure where narrowing a flagged region to the scanner's exact box left **three
+credentials legible**, because the scanner matched one secret of four. That failure is
+the whole reason this tool redacts regions rather than words, and therefore the root of
+the over-covering a user reported four times.
+
+It was never evidence that precise localisation is unsafe. It was evidence that *that*
+localiser was blind. A correct conclusion from a real failure, generalised one step too
+far — the same error as sections 10, 11 and 13.
+
+### Comprehend names things; it does not decide them
+
+```
+comprehend : 5 PII entities in 1215ms
+    AWS_SECRET_KEY    conf 0.96  'dcd_live...ie0H'
+    NAME              conf 0.98  'Deepika Sidda'
+    ADDRESS           conf 0.67  'Madurai'        <- part of "AWS User Group Madurai"
+    DATE_TIME         conf 1.00  '1'
+    DATE_TIME         conf 1.00  'Nov'
+```
+
+0.96 on the credential and 0.67 on the invented address, which is why `MIN_SCORE` sits at
+0.80 with a higher floor for the chattier entity types. `DATE_TIME` is dropped entirely:
+it fires on "1 Nov" and on every log timestamp, and a redaction that covers the clock is
+the over-covering complaint in a new costume. Spans of three characters or fewer are also
+dropped — a lone `5`, the port in `:5432/payments`, came back as an `AWS_SECRET_KEY` at
+1.00.
+
+This is the same over-flagging both Nova models showed in section 7, and it is the
+argument for the split:
+
+```
+recognition   Textract + Comprehend   what is on screen, and exactly where
+decision      Strands Decider 2B      whether it may leave, and whether it is wanted
+```
+
+"Is this a private conversation", "is this an identity document", "does this region bear
+on what the user asked" are not entity-extraction questions.
+
+### End to end, with the model's regions held fixed
+
+The gate is identical in both rows — same model, same flagged regions. Only the reader of
+the pixels changes.
+
+| capture | regions alone | local | AWS | found (local → AWS) |
+|---|---|---|---|---|
+| light 1805x832 | 23.61% | 1.97% | 2.30% | 0 → 2 |
+| small 1024x472 | 26.11% | 2.82% | 3.13% | 0 → 2 |
+| dark 1920x1080 | 14.04% | 2.99% | 3.02% | 1 → 4 |
+
+No leak in any row, control strings readable in all of them.
+
+**The AWS lane does not reduce coverage.** Worth stating plainly, since it is the thing
+that would be assumed: the mesh from section 14 already had coverage at 2–3%, and precise
+boxes unioned on top of it add area rather than removing it. The gain is entirely in
+detection — which was the actual complaint, but is not the same thing.
+
+Latency: ~6.5s for Textract plus Comprehend, against ~170s for the local gate on this
+machine. Cost: $0.0024 a capture, against $0.00. Both numbers are real and neither is the
+reason to choose.
+
+### What it sends, which is the part to be honest about
+
+Everything. The whole screenshot, credentials included, goes to Textract. That is the
+precise opposite of what the clipboard guard does by default, so the lane is opt-in
+behind `--aws-lane` and off unless asked for.
+
+It is not incoherent, it is a different threat model, and a common one: *I trust my own
+AWS account; I do not trust the third-party AI tool I am about to paste this into.*
+Under that model this is free precision. Under the strict model — nothing leaves this
+machine — it is unacceptable, and that stays the default.
+
+### Still unverified
+
+Three captures, all synthetic or self-made, all English, all dark-or-light desktop UI.
+Nothing here establishes how either service behaves on a screenshot of a phone, a
+non-Latin script, or a photograph of a screen. And `ENTITY_KINDS` maps sixteen Comprehend
+types onto four Aperture rules by hand, which is a mapping nobody has checked against
+real positives for anything except `AWS_SECRET_KEY` and `NAME`.
