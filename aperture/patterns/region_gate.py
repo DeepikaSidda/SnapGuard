@@ -334,8 +334,8 @@ class RegionGate:
         #
         # So 4x3, which is 40% faster than 6x4 on the capture a user actually reported.
         # The full table is in tiling.py.
-        columns: int = 4,
-        rows: int = 3,
+        columns: int = 6,
+        rows: int = 4,
         state: str = "A region of a screen captured on a computer.",
         context_state: str = "A screenshot of an application window on a computer.",
         # Full resolution, and it stays that way. Two attempts to shrink images for

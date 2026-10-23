@@ -68,8 +68,8 @@ from .decider import IMAGE_LONG_SIDE, MAX_IMAGES_PER_REQUEST
 #
 # See research/README.md sections 13 and 18 for the full history -- the earlier
 # measurement that moved this from 2x2, and the later one that moved it back down.
-DEFAULT_COLUMNS = 4
-DEFAULT_ROWS = 3
+DEFAULT_COLUMNS = 6
+DEFAULT_ROWS = 4
 
 # Tiles overlap slightly so a line of text sitting on a seam is whole in one of them.
 DEFAULT_OVERLAP = 0.06

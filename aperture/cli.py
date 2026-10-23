@@ -244,6 +244,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
             minutes=args.for_minutes,
             mesh=args.mesh,
             reveal_labels=args.reveal_labels,
+            aws_lane=args.aws_lane,
             columns=args.columns,
             rows=args.rows,
             mode=args.mode,
@@ -256,6 +257,7 @@ def cmd_guard(args: argparse.Namespace) -> int:
         minutes=args.for_minutes,
         mesh=args.mesh,
         reveal_labels=args.reveal_labels,
+        aws_lane=args.aws_lane,
         columns=args.columns,
         rows=args.rows,
         mode=args.mode,
@@ -359,8 +361,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--decider-url", default=None,
                         help="default http://127.0.0.1:8099")
-    parser.add_argument("--columns", type=int, default=4, help="region grid columns")
-    parser.add_argument("--rows", type=int, default=3, help="region grid rows")
+    parser.add_argument("--columns", type=int, default=6, help="region grid columns")
+    parser.add_argument("--rows", type=int, default=4, help="region grid rows")
     sub = parser.add_subparsers(dest="command", required=True)
 
     check = sub.add_parser("check", help="inspect one image")
@@ -439,11 +441,17 @@ def build_parser() -> argparse.ArgumentParser:
     guard.add_argument("--no-mesh", dest="mesh", action="store_false",
                        help="paint flagged regions as whole rectangles instead of "
                             "meshing them down to the parts that are not blank")
+    guard.add_argument("--aws-lane", action="store_true",
+                       help="read the pixels with Amazon Textract and name the "
+                            "spans with Amazon Comprehend instead of the local "
+                            "OCR. Word-precise, and it reads small text the local "
+                            "engine cannot. WARNING: UPLOADS EVERY CAPTURE to your "
+                            "AWS account. The decision stays local")
     guard.add_argument("--cover-labels", dest="reveal_labels", action="store_false",
                        help="also cover text that reads as ordinary language, instead "
                             "of leaving headings and prose visible")
     guard.set_defaults(func=cmd_guard, ocr=True, notify=True, mesh=True,
-                       reveal_labels=True)
+                       reveal_labels=True, aws_lane=False)
 
     vault = sub.add_parser("vault", help="inspect or empty the quarantine folder")
     vault.add_argument("--path", default=None,

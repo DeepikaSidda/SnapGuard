@@ -207,14 +207,89 @@ def _fingerprint(image: Image.Image) -> tuple:
     return (image.size, small.tobytes())
 
 
+Box = tuple[int, int, int, int]
+
+
+def _fast_lane(
+    image: "Image.Image",
+    aws_lane: bool,
+    ocr_on: bool,
+    stamped,  # noqa: ANN001
+    tally,  # noqa: ANN001
+) -> tuple[list[Box], list[Box] | None]:
+    """Locate secrets precisely, and report which words may stay visible.
+
+    Two implementations of the same job, and the choice has consequences beyond
+    detection.
+
+        local   rapidocr + 13 regexes.  Free, nothing leaves the machine. Finds 1
+                credential of 4 on the demo fixture and 0 of 1 on a real capture, and
+                gives boxes per LINE.
+        aws     Textract + Comprehend.  Finds 4 of 4 and 2 of 2, and gives boxes per
+                WORD. Uploads the capture. ~$0.0024 and ~6s.
+
+    The per-word part matters as much as the detection. `mesh.tighten_all` will leave a
+    text line visible if it was read confidently and reads as ordinary language -- that
+    is what keeps a heading like "Your team's API key" on screen while the key below it
+    goes. rapidocr cannot read 9px interface text, so on a small capture it whitelists
+    almost nothing and the mesh covers almost everything in a flagged region. Word boxes
+    also let a label stay while a value on the *same line* is covered, which a line box
+    cannot express at all.
+
+    Returns the hint boxes, and the words to reveal -- or None, meaning "work it out from
+    the local OCR". See research/README.md sections 15 and 17.
+    """
+    hints: list[Box] = []
+    reveal_words: list[Box] | None = None
+
+    if aws_lane:
+        from .aws_lane import AwsLaneUnavailable
+        from .aws_lane import read as aws_read
+        from .aws_lane import reveal_boxes as aws_reveal
+
+        try:
+            reading = aws_read(image)
+        except AwsLaneUnavailable as exc:
+            # Loudly, then fall through to the local lane. A recognition lane that fails
+            # quietly would have the gate treat "the service was unreachable" as "there
+            # are no secrets here".
+            stamped(f"WARNING aws lane unavailable, using local OCR: {exc}")
+        else:
+            for secret in reading.secrets:
+                stamped(f"aws    {secret.kind} ({secret.redacted_sample}) "
+                        f"conf {secret.confidence:.2f} at {secret.box}")
+                tally.secrets.append(secret.kind)
+            hints = [s.box for s in reading.secrets]
+            reveal_words = aws_reveal(reading)
+            stamped(f"aws lane: {len(reading.secrets)} located, "
+                    f"{len(reading.words)} words at {reading.upscale}x, "
+                    f"{reading.total_ms:.0f} ms, ${reading.cost_usd:.4f}")
+            return hints, reveal_words
+
+    if ocr_on:
+        started = time.perf_counter()
+        secrets = scan(image)
+        elapsed = (time.perf_counter() - started) * 1000
+        if secrets:
+            for secret in secrets:
+                stamped(f"regex  {secret.kind} ({secret.redacted_sample}) "
+                        f"at {secret.box}")
+                tally.secrets.append(secret.kind)
+            hints = [s.box for s in secrets]
+        stamped(f"fast lane done in {elapsed:.0f} ms")
+
+    return hints, reveal_words
+
+
 def guard_clipboard(
     *,
     decider_url: str | None = None,
     minutes: int = 0,
     mesh: bool = True,
     reveal_labels: bool = True,
-    columns: int = 4,
-    rows: int = 3,
+    aws_lane: bool = False,
+    columns: int = 6,
+    rows: int = 4,
     mode: str = "block",
     use_ocr: bool = True,
     notify: bool = True,
@@ -300,18 +375,8 @@ def guard_clipboard(
             except Exception as exc:  # noqa: BLE001
                 stamped(f"WARNING could not hold the clipboard: {exc}")
 
-            # 3. Fast lane: exact, instant, gives coordinates.
-            hints: list[tuple[int, int, int, int]] = []
-            if ocr_on:
-                started = time.perf_counter()
-                secrets = scan(image)
-                elapsed = (time.perf_counter() - started) * 1000
-                if secrets:
-                    for secret in secrets:
-                        stamped(f"regex  {secret.kind} ({secret.redacted_sample}) at {secret.box}")
-                        tally.secrets.append(secret.kind)
-                    hints = [s.box for s in secrets]
-                stamped(f"fast lane done in {elapsed:.0f} ms")
+            # 3. Fast lane: exact, gives coordinates.
+            hints, reveal_words = _fast_lane(image, aws_lane, ocr_on, stamped, tally)
 
             # 4. Judgement lane.
             result = gate.inspect(image, hint_boxes=hints)
@@ -372,7 +437,9 @@ def guard_clipboard(
                 # in an editor pane costs a bar, not the pane. Pixel arithmetic, no
                 # model call, and it makes no guess about which text is sensitive, which
                 # is what separates it from the regex-narrowing that was reverted.
-                meshed, shrunk = tighten_all(image, boxes, enabled=mesh, reveal_labels=reveal_labels)
+                meshed, shrunk = tighten_all(image, boxes, enabled=mesh,
+                                           reveal_labels=reveal_labels,
+                                           reveal_boxes=reveal_words)
                 if shrunk < 1.0:
                     stamped(f"mesh      kept {shrunk:.0%} of the flagged area, "
                             f"{len(boxes)} region(s) -> {len(meshed)} boxes")
@@ -494,8 +561,9 @@ def guard_folders(
     minutes: int = 0,
     mesh: bool = True,
     reveal_labels: bool = True,
-    columns: int = 4,
-    rows: int = 3,
+    aws_lane: bool = False,
+    columns: int = 6,
+    rows: int = 4,
     mode: str = "block",
     use_ocr: bool = True,
     replace: bool = False,
@@ -597,13 +665,9 @@ def guard_folders(
                     tally.seen += 1
                     stamped(f"new file {path.name}, {image.width}x{image.height}")
 
-                    hints: list[tuple[int, int, int, int]] = []
-                    if ocr_on:
-                        for secret in scan(image):
-                            stamped(f"regex  {secret.kind} "
-                                    f"({secret.redacted_sample}) at {secret.box}")
-                            tally.secrets.append(secret.kind)
-                            hints.append(secret.box)
+                    hints, reveal_words = _fast_lane(
+                        image, aws_lane, ocr_on, stamped, tally
+                    )
 
                     result = gate.inspect(image, hint_boxes=hints)
                     for finding in result.findings:
@@ -616,7 +680,10 @@ def guard_folders(
                     elif boxes:
                         tally.redacted += 1
                         # Keep the regions, drop their blank parts. See mesh.py.
-                        boxes, shrunk = tighten_all(image, boxes, enabled=mesh, reveal_labels=reveal_labels)
+                        boxes, shrunk = tighten_all(
+                            image, boxes, enabled=mesh,
+                            reveal_labels=reveal_labels, reveal_boxes=reveal_words,
+                        )
                         if shrunk < 1.0:
                             stamped(f"mesh      kept {shrunk:.0%} of the flagged area")
                     else:
