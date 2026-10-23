@@ -41,7 +41,7 @@ from .decider import Decider
 from .notify import Notifier
 from .patterns import Policy, RegionGate, Verdict
 from .questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND
-from .redact import hold_placeholder, redact
+from .redact import hold_placeholder, redact, resolve_boxes
 from .scanner import ocr_available, scan
 from .vault import Vault
 
@@ -319,7 +319,13 @@ def guard_clipboard(
                 stamped(f"decider {finding}")
 
             # 5. Put back whatever is safe, and say what happened.
-            boxes = list(hints) + result.boxes()
+            #
+            # Precise boxes from the scanner REPLACE the tile the model flagged, rather
+            # than being added to it. Blacking out both destroyed a quarter of the
+            # screen to hide four characters.
+            boxes, narrowed = resolve_boxes(result.boxes(), hints)
+            if narrowed:
+                stamped(f"narrowed {narrowed} flagged region(s) to exact locations")
             found = [s for s in tally.secrets[-len(hints):]] if hints else []
             if result.verdict is Verdict.WITHHOLD or result.verdict is Verdict.UNREADABLE:
                 tally.withheld += 1
@@ -588,7 +594,7 @@ def guard_folders(
                     for finding in result.findings:
                         stamped(f"decider {finding}")
 
-                    boxes = list(hints) + result.boxes()
+                    boxes, narrowed = resolve_boxes(result.boxes(), hints)
                     if result.verdict in (Verdict.WITHHOLD, Verdict.UNREADABLE):
                         boxes = [(0, 0, image.width, image.height)]
                         tally.withheld += 1

@@ -118,6 +118,8 @@ class GateResult:
     # Per-region scores, keyed by tile index then question name, for the record.
     scores: dict[int, dict[str, float]] = field(default_factory=dict)
     illegible: list[Tile] = field(default_factory=list)
+    # tile index -> tighter boxes, when refinement localised the signal inside it.
+    refined: dict[int, list[tuple[int, int, int, int]]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     # Answers recorded for the record rather than to fire a rule -- a `choice` naming
     # what kind of screen this is, for instance. The generative half uses these to
@@ -137,8 +139,18 @@ class GateResult:
         return list(dict.fromkeys(out)) + self.notes
 
     def boxes(self) -> list[tuple[int, int, int, int]]:
-        """Pixel boxes of the flagged regions, for a redactor to paint over."""
-        return [t.box for t in self.flagged]
+        """Pixel boxes to paint over.
+
+        Returns the refined sub-region boxes where refinement localised the signal, and
+        the whole region where it could not. Refinement asks the model again on a
+        quarter of the region, so a hit is still the model's own claim about an area --
+        which is what makes it safe to narrow to, unlike a pattern match that only sees
+        the secrets it was taught.
+        """
+        out: list[tuple[int, int, int, int]] = []
+        for tile in self.flagged:
+            out.extend(self.refined.get(tile.index) or [tile.box])
+        return out
 
     @property
     def injectable(self) -> list[Tile]:
@@ -258,6 +270,10 @@ class RegionGate:
         # 0.505 to 0.548, so 0.25 separates them with wide margin on both sides, where
         # the rule's own 0.50 threshold left 0.005.
         coarse_clear_below: float = 0.25,
+        # Subdivide a flagged region and re-ask, to narrow the box from a quarter of the
+        # screen to a sixteenth. Only flagged regions are refined, so a clean screen
+        # costs nothing extra.
+        refine_flagged: bool = True,
         # Scored alongside the sensitivity rules when `inspect` is given a question.
         # A factory rather than a Rule, because the question has to quote what the user
         # actually asked, which is not known until inspection time.
@@ -302,6 +318,7 @@ class RegionGate:
         self.context_rules = list(context_rules)
         self.info_questions = dict(info_questions or {})
         self.coarse_clear_below = coarse_clear_below
+        self.refine_flagged = refine_flagged
         self.relevance = relevance
         self.legibility = legibility
         self.policy = policy or Policy()
@@ -442,11 +459,70 @@ class RegionGate:
                 )
             if fired:
                 result.flagged.append(tile)
+                self._refine(tile, fired, result)
             else:
                 result.cleared.append(tile)
 
             if relevance and relevance.fires(reply.value(relevance.name)):
                 result.relevant.append(tile)
+
+    def _refine(
+        self, tile: Tile, fired: Sequence[Rule], result: GateResult
+    ) -> None:
+        """Subdivide a flagged region and find out which part of it fired.
+
+        A 2x2 grid of a 1080p screen makes each region a quarter of the display. Black
+        one out to hide a line of text and you have destroyed a file tree, an editor
+        pane and a lot of empty space -- which is exactly what a user reported.
+
+        The wrong fix is to trust the deterministic scanner's precise box and cover only
+        that: tried, and it left three credentials legible, because the scanner matched
+        one secret of four. See `redact.resolve_boxes`.
+
+        The right fix is to ask the model again, smaller. Subdivide the flagged region
+        and re-test only the rules that actually fired. Sub-regions that fire give a box
+        four times tighter; if none fire, the signal was diffuse and the whole region is
+        kept. Cost is bounded because only flagged regions are ever refined, and most
+        screens flag nothing.
+        """
+        if not self.refine_flagged or tile.index < 0:
+            return
+        # Below this there is not enough left to be worth a request, and the detail is
+        # already past what a 448px downscale preserves.
+        if min(tile.width, tile.height) < 160:
+            return
+
+        questions = {r.name: r.question for r in fired}
+        hits: list[Tile] = []
+        for sub in tile_grid(tile.image, columns=2, rows=2):
+            if looks_blank(sub.image):
+                continue
+            reply = self.decider.ask(self.state, questions, [sub.image])
+            result.decider_calls += 1
+            result.decider_ms += reply.latency_ms
+            if any(r.fires(reply.value(r.name)) for r in fired):
+                # Translate the sub-region's coordinates back onto the full screen.
+                left, top = tile.box[0], tile.box[1]
+                hits.append(
+                    Tile(
+                        index=tile.index,
+                        row=sub.row,
+                        column=sub.column,
+                        box=(
+                            left + sub.box[0],
+                            top + sub.box[1],
+                            left + sub.box[2],
+                            top + sub.box[3],
+                        ),
+                        image=sub.image,
+                    )
+                )
+
+        if hits:
+            result.refined[tile.index] = [t.box for t in hits]
+            result.notes.append(
+                f"region {tile.index} narrowed to {len(hits)} of 4 sub-regions"
+            )
 
     # ---- the entry point ---------------------------------------------------
 

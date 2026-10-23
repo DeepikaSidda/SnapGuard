@@ -83,6 +83,68 @@ def redact(
     return Redaction(image=out, boxes=[_clamp(b, out.size) for b in boxes], mode=mode)
 
 
+def resolve_boxes(
+    flagged_tiles: Sequence[Box],
+    precise: Sequence[Box],
+) -> tuple[list[Box], int]:
+    """Decide what to actually paint over, preferring precision to tiles.
+
+    The naive version was `precise + flagged_tiles`, which blacked out the exact location
+    of a secret *and* the whole quarter of the screen it sat in. On a real capture that
+    destroyed a file tree, an editor pane and a lot of empty space along with four
+    characters of credential -- the user's screenshot came back half gone.
+
+    The obvious fix is wrong, and it was tried: "a flagged tile containing a precise box
+    is redacted at that box only". It produced a beautiful screenshot with three
+    credentials still legible. The scanner had matched one of four secrets in that tile
+    -- two wrapped across lines so the patterns missed them, and a Stripe key was shorter
+    than its pattern required -- and narrowing to the one hit left the other three
+    exposed.
+
+    The model's answer is about the TILE. `credential 0.824` means "there is a credential
+    in this region", not "there is exactly one and it is here". A precise hit is evidence
+    of *a* secret, never evidence that it is the only one.
+
+    So the boxes are the UNION:
+
+      * every flagged tile is redacted whole, because that is the only claim the model
+        actually made;
+      * every precise box is redacted too, including ones outside any flagged tile --
+        the scanner found something the model missed, which is the case the two lanes
+        exist to cover for each other.
+
+    Over-redaction is the safe failure here. The fix for covering too much is a finer
+    grid, so the tile is smaller, not trusting a localiser that only sees patterns it
+    has been taught.
+
+    Returns the boxes to paint, and how many precise hits refined a flagged tile.
+    """
+    resolved: list[Box] = list(flagged_tiles)
+    refined = 0
+    for box in precise:
+        resolved.append(box)
+        if any(_contained(box, tile) for tile in flagged_tiles):
+            refined += 1
+    return resolved, refined
+
+
+def _contained(box: Box, tile: Box, min_overlap: float = 0.5) -> bool:
+    """Does `box` sit mostly inside `tile`?
+
+    Not strict containment: OCR boxes are padded and tiles overlap slightly, so a box
+    straddling a seam by a few pixels should still count as belonging to the tile.
+    """
+    left = max(box[0], tile[0])
+    top = max(box[1], tile[1])
+    right = min(box[2], tile[2])
+    bottom = min(box[3], tile[3])
+    if right <= left or bottom <= top:
+        return False
+    overlap = (right - left) * (bottom - top)
+    area = (box[2] - box[0]) * (box[3] - box[1])
+    return bool(area) and overlap / area >= min_overlap
+
+
 def hold_placeholder(size: tuple[int, int], message: str) -> Image.Image:
     """The image that sits on the clipboard while the gate is still thinking.
 

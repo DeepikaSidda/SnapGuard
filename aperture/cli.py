@@ -21,7 +21,7 @@ from PIL import Image
 from .decider import Decider, DeciderUnavailable, VisionNotEnabled
 from .patterns import Policy, RegionGate, Verdict
 from .questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND
-from .redact import redact
+from .redact import redact, resolve_boxes
 from .scanner import ocr_available, scan
 
 BAR = "-" * 72
@@ -93,7 +93,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     _print_result(result, image)
 
     if args.out and result.verdict in (Verdict.REDACT, Verdict.WITHHOLD):
-        boxes = result.boxes() + hints
+        boxes, narrowed = resolve_boxes(result.boxes(), hints)
         if result.verdict is Verdict.WITHHOLD:
             boxes = [(0, 0, image.width, image.height)]
         redaction = redact(image, boxes, mode=args.mode)
