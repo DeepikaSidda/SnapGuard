@@ -205,7 +205,7 @@ def test_mesh_does_not_wrap_ink_around_an_edge():
     assert mask[:, columns - 1].any()
 
 
-@pytest.mark.parametrize("cell", [8, 14, 24])
+@pytest.mark.parametrize("cell", [4, 6, 8, 14, 24])
 def test_the_property_holds_at_every_cell_size(cell: int):
     image, box = _pane()
     boxes = tighten(image, box, cell=cell)
@@ -273,3 +273,80 @@ def test_coverage_never_exceeds_the_image():
     image = Image.new("RGB", (100, 100), BACKGROUND)
     r = redact(image, [(0, 0, 100, 100), (0, 0, 100, 100), (10, 10, 90, 90)], label=None)
     assert r.fraction_of(image) == 1.0
+
+
+# ---- extending along a line across a region seam ----------------------------
+
+
+def _seam_screen():
+    """A long credential line, and only its right-hand half flagged.
+
+    Reproduces what the fine grid does to a wide line: the model is shown each piece
+    separately, the piece without the high-entropy value in it looks clean and is
+    cleared, and painting only the piece that fired leaves the prefix readable.
+    """
+    img = Image.new("RGB", (600, 120), BACKGROUND)
+    ImageDraw.Draw(img).text(
+        (20, 50), "STRIPE_SECRET_KEY=sk_test_REDACTEDFIXTURE", font=_font(13),
+        fill=(206, 145, 120),
+    )
+    # The gate flagged only the right half.
+    return img, (300, 30, 600, 90)
+
+
+def test_extension_covers_the_rest_of_the_line():
+    from aperture.mesh import extend_along_ink, tighten
+
+    image, flagged = _seam_screen()
+    bars = tighten(image, flagged)
+    extended = extend_along_ink(image, bars)
+
+    reached = min(b[0] for b in extended)
+    assert reached <= 26, (
+        f"the bar should have grown back to the start of the line, stopped at {reached}"
+    )
+
+
+def test_extension_covers_every_inked_pixel_on_the_flagged_line():
+    """The property, stated over the line rather than the region."""
+    from aperture.mesh import extend_along_ink, tighten
+
+    image, flagged = _seam_screen()
+    boxes = extend_along_ink(image, tighten(image, flagged))
+
+    on_the_line = [
+        (x, y) for x, y in _ink_coordinates(image) if flagged[1] <= y < flagged[3]
+    ]
+    assert on_the_line, "fixture should have ink on the flagged rows"
+    uncovered = [
+        (x, y)
+        for x, y in on_the_line
+        if not any(l <= x < r and t <= y < b for l, t, r, b in boxes)
+    ]
+    assert not uncovered, f"{len(uncovered)} pixels of the line escaped: {uncovered[:5]}"
+
+
+def test_extension_stops_at_a_gutter():
+    """It must not run away across the whole screen at the first gap."""
+    from aperture.mesh import extend_along_ink, tighten
+
+    img = Image.new("RGB", (600, 120), BACKGROUND)
+    d = ImageDraw.Draw(img)
+    d.text((400, 50), "secret=abc123", font=_font(13), fill=(230, 230, 230))
+    # Unrelated content far to the left, past a wide gap.
+    d.text((20, 50), "ok", font=_font(13), fill=(230, 230, 230))
+
+    boxes = extend_along_ink(img, tighten(img, (380, 30, 600, 90)))
+    assert min(b[0] for b in boxes) > 120, (
+        "extension crossed a wide gap and swallowed unrelated content"
+    )
+
+
+def test_extension_can_only_grow_a_box():
+    from aperture.mesh import extend_along_ink
+
+    image, flagged = _seam_screen()
+    original = [(320, 40, 400, 70)]
+    grown = extend_along_ink(image, original)
+    assert grown[0][0] <= 320 and grown[0][2] >= 400
+    assert grown[0][1] == 40 and grown[0][3] == 70, "vertical extent must not change"

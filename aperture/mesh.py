@@ -57,10 +57,37 @@ from PIL import Image
 
 Box = tuple[int, int, int, int]
 
-# 14px squares. Text in a screenshot is 11-16px tall, so a cell is about one character:
-# fine enough that a single line of credentials costs a bar rather than a block, coarse
-# enough that a flagged region yields tens of boxes and not thousands.
-DEFAULT_CELL = 14
+# 6px squares, and this was 14 until it was measured.
+#
+# 14 was reasoned rather than measured: screenshot text is 11-16px tall, so a cell is
+# about one character. That holds at the scale it was chosen for and breaks at smaller
+# ones. The same page captured at 1024x472 instead of 1805x832 has ~8px text, so a 14px
+# cell spans a line plus its leading, dilating by one cell merges adjacent lines, and the
+# mesh kept 82% of the flagged area -- barely better than doing nothing.
+#
+# Swept across three real captures at three scales, holding the model's flagged regions
+# fixed. The number is the fraction of the frame still covered:
+#
+#   cell   1024x472 light   1805x832 light   1920x1080 dark   boxes
+#      4            5.8%           21.2% !            1.8%   1-34
+#      6            8.8%            6.7%             2.4%   12-25
+#      8            9.6%            9.7%             3.1%   14-20
+#     10           11.5%            8.4%             4.5%    5-17
+#     14           21.5%           12.5%             4.5%    3-9
+#
+# No leak at any size, which is expected: the gradient test runs per pixel, so cell size
+# changes how tightly ink is boxed, not whether it is found.
+#
+# 6 is best or near-best at every scale. 4 is better on two and catastrophic on the
+# third -- that 21.2% is the dense-region ceiling tripping, because dilating by 4px
+# around every antialiased edge on a busy light page covers more than 72% of the cells,
+# so it gave up and painted rectangles. Small cells make the ceiling easier to hit, and 6
+# sits below that cliff on all three.
+#
+# A scaling rule keyed to image size was the obvious alternative and is not needed: a
+# single value wins across a 2.3x range of capture sizes, and a fixed number has no
+# heuristic to be wrong.
+DEFAULT_CELL = 6
 
 # A cell counts as inked above EITHER of these.
 #
@@ -279,6 +306,78 @@ def _fuse(a: Box, b: Box, overlap: float) -> Box | None:
     return (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
 
 
+def extend_along_ink(
+    image: Image.Image,
+    boxes: Sequence[Box],
+    *,
+    cell: int = DEFAULT_CELL,
+    gap: int = 3,
+) -> list[Box]:
+    """Grow each bar sideways while the line of content it sits on keeps going.
+
+    This repairs a false negative that the fine grid creates. A line of credentials is
+    wider than a region, so it is cut across a seam, and the model is then shown each
+    piece separately. Asked about the piece reading `STRIPE_SECRET_KEY=sk_live_` with the
+    value chopped off, it finds nothing high-entropy and clears the region -- correctly,
+    for what it was shown. The neighbouring piece holding the value fires. Paint only the
+    region that fired and the screenshot comes back with `sk_live_` legible, and with
+    `@db.acme.internal:5432/p` legible on the line above, which happened on this
+    project's own demo fixture and is how it was found.
+
+    Covering the rest of the line is the conservative reading of what the model actually
+    said. It flagged a region because a credential is in it; a credential does not stop
+    being one at a tile boundary. So each bar grows left and right for as long as ink
+    continues on the same rows, bridging gaps up to `gap` cells -- wide enough to cross
+    the spaces inside a line, narrow enough to stop at a gutter or a column of
+    whitespace.
+
+    This deliberately overrides a `clean` verdict on the neighbouring region. That is the
+    point: that verdict was reached on a crop the seam had already ruined.
+    """
+    if not boxes:
+        return []
+
+    mask, rows, columns = ink_mask(image, (0, 0, image.width, image.height), cell=cell)
+    if mask.size == 0:
+        return list(boxes)
+
+    out: list[Box] = []
+    for left, top, right, bottom in boxes:
+        row_from = max(0, min(rows - 1, top // cell))
+        row_to = max(0, min(rows - 1, (bottom - 1) // cell))
+        band = mask[row_from : row_to + 1, :]
+
+        start = max(0, min(columns - 1, left // cell))
+        end = max(0, min(columns - 1, (right - 1) // cell))
+
+        while start > 0:
+            window = band[:, max(0, start - gap) : start]
+            if not window.any():
+                break
+            start = max(0, start - gap)
+        while end < columns - 1:
+            window = band[:, end + 1 : min(columns, end + 1 + gap)]
+            if not window.any():
+                break
+            end = min(columns - 1, end + gap)
+
+        # Then trim back to the outermost inked cell, so bridging a gap cannot leave a
+        # bar hanging over blank space.
+        lit = band[:, start : end + 1].any(axis=0).nonzero()[0]
+        if lit.size:
+            start, end = start + int(lit[0]), start + int(lit[-1])
+
+        out.append(
+            (
+                min(left, start * cell),
+                top,
+                max(right, min(image.width, (end + 1) * cell)),
+                bottom,
+            )
+        )
+    return out
+
+
 def tighten_all(
     image: Image.Image,
     boxes: Sequence[Box],
@@ -297,6 +396,7 @@ def tighten_all(
     out: list[Box] = []
     for box in boxes:
         out.extend(tighten(image, box, cell=cell))
+    out = extend_along_ink(image, out, cell=cell)
     out = join_adjacent(out)
 
     # Union area, not a sum of areas: the regions this started from overlap by 6%, so
