@@ -27,7 +27,8 @@ from .scanner import ocr_available, scan
 BAR = "-" * 72
 
 
-def _gate(decider: Decider, columns: int, rows: int, describe: bool = False) -> RegionGate:
+def _gate(decider: Decider, columns: int, rows: int, describe: bool = False,
+          precise: bool = False) -> RegionGate:
     # screen_kind is a 7-option choice that is informational only -- it never fires a
     # rule. Measured, it adds 5.9s to the context pass (10.0s -> 15.9s), so it is
     # opt-in via --describe rather than paid for on every run.
@@ -37,6 +38,10 @@ def _gate(decider: Decider, columns: int, rows: int, describe: bool = False) -> 
         context_rules=CONTEXT_RULES,
         info_questions=SCREEN_KIND if describe else None,
         policy=Policy(fail_closed=True),
+        # Subdividing twice rather than once takes the covered area from ~24% of a
+        # screen to ~14%, and roughly doubles the number of local decisions. Measured
+        # on the reported case: 11 calls vs 23.
+        refine_depth=2 if precise else 1,
         columns=columns,
         rows=rows,
     )
@@ -89,7 +94,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     elif args.ocr:
         print("  fast lane: OCR not installed (pip install 'aperture-gate[ocr]')")
 
-    result = _gate(decider, args.columns, args.rows, describe=args.describe).inspect(image, hint_boxes=hints)
+    result = _gate(decider, args.columns, args.rows, describe=args.describe, precise=args.precise).inspect(image, hint_boxes=hints)
     _print_result(result, image)
 
     if args.out and result.verdict in (Verdict.REDACT, Verdict.WITHHOLD):
@@ -325,6 +330,10 @@ def build_parser() -> argparse.ArgumentParser:
                             "what was decided about it")
     check.add_argument("--mode", choices=["block", "blur"], default="block")
     check.add_argument("--no-ocr", dest="ocr", action="store_false")
+    check.add_argument("--precise", action="store_true",
+                       help="subdivide twice instead of once: covers ~14%% of the "
+                            "screen instead of ~24%%, at roughly double the local "
+                            "decisions")
     check.add_argument("--describe", action="store_true",
                        help="also ask what kind of screen it is. Informational only, "
                             "and it costs about 6 seconds")

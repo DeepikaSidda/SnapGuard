@@ -274,6 +274,22 @@ class RegionGate:
         # screen to a sixteenth. Only flagged regions are refined, so a clean screen
         # costs nothing extra.
         refine_flagged: bool = True,
+        # How many times to quarter a flagged region. Each level cuts the covered area
+        # by up to four and costs up to four more requests, but only on regions that
+        # actually fired. 2 takes a quarter-screen region down to a sixty-fourth of the
+        # display, which is about the size of a line of text in an editor.
+        refine_depth: int = 1,
+        # The shape to subdivide a flagged region into. Horizontal strips were tried on
+        # the theory that a credential is a wide, short thing and would fire in one strip
+        # rather than two quadrants. Measured, strips and quadrants came out the same
+        # (23% vs 24% covered on the reported case), because the limit is the model
+        # firing on three of four pieces, not the geometry. Quadrants kept: squarer
+        # sub-regions survive the 448px downscale better.
+        refine_columns: int = 2,
+        refine_rows: int = 2,
+        # Stop subdividing below this; the detail is already past what the server's
+        # 448px downscale preserves, so the model would be judging a smear.
+        refine_min_side: int = 150,
         # Scored alongside the sensitivity rules when `inspect` is given a question.
         # A factory rather than a Rule, because the question has to quote what the user
         # actually asked, which is not known until inspection time.
@@ -319,6 +335,10 @@ class RegionGate:
         self.info_questions = dict(info_questions or {})
         self.coarse_clear_below = coarse_clear_below
         self.refine_flagged = refine_flagged
+        self.refine_depth = refine_depth
+        self.refine_columns = refine_columns
+        self.refine_rows = refine_rows
+        self.refine_min_side = refine_min_side
         self.relevance = relevance
         self.legibility = legibility
         self.policy = policy or Policy()
@@ -487,42 +507,75 @@ class RegionGate:
         """
         if not self.refine_flagged or tile.index < 0:
             return
-        # Below this there is not enough left to be worth a request, and the detail is
-        # already past what a 448px downscale preserves.
-        if min(tile.width, tile.height) < 160:
-            return
+        boxes = self._narrow(tile.image, tile.box, fired, result, self.refine_depth)
+        if boxes and boxes != [tile.box]:
+            result.refined[tile.index] = boxes
+            area = sum((r - l) * (b - t) for l, t, r, b in boxes)
+            whole = tile.width * tile.height
+            result.notes.append(
+                f"region {tile.index} narrowed to {len(boxes)} box(es), "
+                f"{area / whole:.0%} of the region"
+            )
+
+    def _narrow(
+        self,
+        image: Image.Image,
+        offset_box: tuple[int, int, int, int],
+        fired: Sequence[Rule],
+        result: GateResult,
+        depth: int,
+    ) -> list[tuple[int, int, int, int]]:
+        """Recursively quarter `image`, keeping only the parts that still fire.
+
+        Each level cuts the covered area by up to four. One level took a reported case
+        from 56% of the frame to 24% and saved the user's file tree; the recursion is
+        what takes it further, because a line of text in an editor is a very small
+        fraction of a quarter-screen region.
+
+        Recursion stops when the model stops localising -- if every sub-region fires, or
+        none does, the signal is diffuse and the parent box is the honest answer. It also
+        stops when a sub-region gets too small to survive the 448px downscale, since
+        below that the model is being asked about a smear.
+        """
+        left, top = offset_box[0], offset_box[1]
+        width, height = image.size
+
+        if depth <= 0 or min(width, height) < self.refine_min_side:
+            return [offset_box]
 
         questions = {r.name: r.question for r in fired}
-        hits: list[Tile] = []
-        for sub in tile_grid(tile.image, columns=2, rows=2):
+        hits: list[tuple[Image.Image, tuple[int, int, int, int]]] = []
+        pieces = tile_grid(image, columns=self.refine_columns, rows=self.refine_rows)
+        for sub in pieces:
             if looks_blank(sub.image):
                 continue
             reply = self.decider.ask(self.state, questions, [sub.image])
             result.decider_calls += 1
             result.decider_ms += reply.latency_ms
             if any(r.fires(reply.value(r.name)) for r in fired):
-                # Translate the sub-region's coordinates back onto the full screen.
-                left, top = tile.box[0], tile.box[1]
-                hits.append(
-                    Tile(
-                        index=tile.index,
-                        row=sub.row,
-                        column=sub.column,
-                        box=(
-                            left + sub.box[0],
-                            top + sub.box[1],
-                            left + sub.box[2],
-                            top + sub.box[3],
-                        ),
-                        image=sub.image,
-                    )
+                absolute = (
+                    left + sub.box[0],
+                    top + sub.box[1],
+                    left + sub.box[2],
+                    top + sub.box[3],
                 )
+                hits.append((sub.image, absolute))
 
-        if hits:
-            result.refined[tile.index] = [t.box for t in hits]
-            result.notes.append(
-                f"region {tile.index} narrowed to {len(hits)} of 4 sub-regions"
+        # Nothing fired: the parent's signal did not survive subdivision, so trust the
+        # parent rather than concluding the content vanished.
+        if not hits:
+            return [offset_box]
+        # Everything fired: the content is spread across the whole region, and four
+        # boxes covering it are no better than one.
+        if len(hits) == len(pieces):
+            return [offset_box]
+
+        narrowed: list[tuple[int, int, int, int]] = []
+        for sub_image, absolute in hits:
+            narrowed.extend(
+                self._narrow(sub_image, absolute, fired, result, depth - 1)
             )
+        return narrowed
 
     # ---- the entry point ---------------------------------------------------
 
