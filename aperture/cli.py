@@ -92,7 +92,26 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     # The fast lane first. Exact, instant, and it gives the gate somewhere to look.
     hints: list[tuple[int, int, int, int]] = []
-    if args.ocr and ocr_available():
+    reveal_boxes = None
+    if args.aws_lane:
+        # Recognition in the cloud, decision still local. This SENDS THE SCREENSHOT,
+        # credentials and all, which is the opposite of the default. See aws_lane.py.
+        from .aws_lane import AwsLaneUnavailable, read, reveal_boxes as words_to_keep
+
+        try:
+            reading = read(image)
+        except AwsLaneUnavailable as exc:
+            print(f"  aws lane unavailable: {exc}")
+            return 1
+        print(f"  aws lane (Textract+Comprehend): {len(reading.secrets)} located, "
+              f"{len(reading.words)} words read at {reading.upscale}x, "
+              f"{reading.total_ms:.0f}ms, ${reading.cost_usd:.4f}")
+        for secret in reading.secrets:
+            print(f"    {secret.kind}: {secret.redacted_sample} "
+                  f"(conf {secret.confidence:.2f}) at {secret.box}")
+        hints = [s.box for s in reading.secrets]
+        reveal_boxes = words_to_keep(reading)
+    elif args.ocr and ocr_available():
         secrets = scan(image)
         print(f"  fast lane (OCR+regex): {len(secrets)} structured secret(s)")
         for secret in secrets:
@@ -113,7 +132,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             # The mesh: keep the model's regions, drop the blank parts of them. No model
             # call, no OCR, and no claim about which text is sensitive -- see mesh.py.
             meshed, shrunk = tighten_all(
-                image, boxes, enabled=args.mesh, reveal_labels=args.reveal_labels
+                image, boxes, enabled=args.mesh,
+                reveal_labels=args.reveal_labels, reveal_boxes=reveal_boxes,
             )
         redaction = redact(image, meshed, mode=args.mode)
         redaction.image.save(args.out)
@@ -369,7 +389,15 @@ def build_parser() -> argparse.ArgumentParser:
                             "both. Use it if a short low-entropy secret (a PIN, a "
                             "simple password) might be on screen, since those read as "
                             "ordinary language")
-    check.set_defaults(func=cmd_check, ocr=True, mesh=True, reveal_labels=True)
+    check.add_argument("--aws-lane", action="store_true",
+                       help="read the pixels with Amazon Textract and name the spans "
+                            "with Amazon Comprehend instead of the local OCR. Far "
+                            "better at locating a key -- 4 of 4 against 1 of 4 on the "
+                            "demo fixture -- and word-precise. WARNING: this UPLOADS "
+                            "THE WHOLE SCREENSHOT, credentials included, to your AWS "
+                            "account. The decision is still made locally by Decider")
+    check.set_defaults(func=cmd_check, ocr=True, mesh=True, reveal_labels=True,
+                       aws_lane=False)
 
     ask = sub.add_parser("ask", help="run the agent against a screen")
     ask.add_argument("question")

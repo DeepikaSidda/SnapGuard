@@ -496,6 +496,7 @@ def tighten_all(
     cell: int = DEFAULT_CELL,
     enabled: bool = True,
     reveal_labels: bool = True,
+    reveal_boxes: Sequence[Box] | None = None,
 ) -> tuple[list[Box], float]:
     """Mesh every flagged region, and report how much of the original area survived.
 
@@ -522,9 +523,15 @@ def tighten_all(
 
     reveal: list[Box] = []
     if reveal_labels:
-        from .scanner import ordinary_language_boxes
+        if reveal_boxes is not None:
+            # Supplied by the caller, which in practice means Textract word boxes via
+            # `aws_lane.reveal_boxes`. Word-level rather than line-level, so a label can
+            # be revealed while the value beside it on the same line is covered.
+            reveal = list(reveal_boxes)
+        else:
+            from .scanner import ordinary_language_boxes
 
-        reveal = ordinary_language_boxes(image)
+            reveal = ordinary_language_boxes(image)
 
     out: list[Box] = []
     for box in boxes:
