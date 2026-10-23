@@ -1112,3 +1112,51 @@ now backstopped by a whole-frame rule, and `credential` is the one with measured
 region-level evidence (§12) — but that evidence is from a 2x2 grid, which §16 is the
 proof matters. The threshold of 0.35 derived there is a threshold about a different-sized
 thing than the gate now uses.
+
+---
+
+## 17. The free fix that did not exist
+
+Section 15 left an obvious cheap win on the table. Textract reads a key the local OCR
+cannot, and Textract is handed an *enlarged* image because it refuses text under 15px.
+So: enlarge the image before the local OCR too, and get the same detection for free, with
+nothing leaving the machine.
+
+Measured before building it (`spike_ocr_upscale.py`), which is the only reason no time
+was spent building it:
+
+| capture | scale | text runs | secrets found | key characters read |
+|---|---|---|---|---|
+| light 1805x832 | 1.0 | 29 | 0 | no |
+| | 1.5 | 29 | 0 | no |
+| | 2.0 | 29 | 0 | no |
+| | 3.0 | 29 | 0 | no |
+| dark 1920x1080 | 1.0 | 27 | 1 | yes |
+| | 3.0 | 27 | 1 | yes |
+
+**No effect at any scale.** The giveaway is the run count: identical at every scale, on
+both captures. rapidocr resizes internally, so enlarging the input first changes nothing
+it sees. The elapsed time even falls as the scale rises (13.2s to 4.0s), which is the
+same effect from the other side.
+
+So the hypothesis in §15 was half right. Upscaling is what Textract *needs*, and it is not
+what made Textract better. It is a better recogniser, and no amount of resampling turns
+rapidocr into it. `marker read` -- does the OCR return the characters at all, before any
+pattern is applied -- stays `no` at 3x on the capture that matters.
+
+Two consequences worth keeping:
+
+**The local fast lane cannot be fixed by tuning.** It finds 1 of 4 credentials on the demo
+fixture and 0 of 1 on a real capture, and that is the engine's ceiling, not a
+configuration. Precise, word-level localisation needs either a better OCR or the cloud
+lane. Nothing in this repository is blocked on it -- the 2B model catches what the OCR
+misses, which is the whole reason there are two lanes -- but the over-covering a user
+reported four times traces straight back to this, because a region is the smallest unit a
+blind locator can offer.
+
+**A side effect nobody would predict.** Upscaling slightly *reduces* the label whitelist,
+26 confident ordinary-language lines down to 23. So it would have made the "keep the
+heading, cover the key" behaviour marginally worse while fixing nothing.
+
+The measurement took four minutes. Building it would have taken half an hour and shipped
+a change with no effect and a small regression in it.
