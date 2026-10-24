@@ -11,9 +11,7 @@ SnapGuard puts a decision in between. **Strands Decider 2B** runs on your own ma
 looks at your screen region by region, and decides what may leave. The key gets covered.
 Everything you actually meant to share stays readable.
 
-```
-56% of a screen covered  ->  1.2%, one box, on the line that holds the key
-```
+
 
 ## When you would use it
 
@@ -445,9 +443,4 @@ the three that were clean and relevant, and never learns the others existed.
 
 ---
 
-## License
 
-Apache-2.0. See [LICENSE](LICENSE).
-
-Built for the AWS **Agent Experience Hackathon: Strands Decider**.
-`#strands-decider-2b` `#context-memory`
