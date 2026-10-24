@@ -147,7 +147,7 @@ def looks_like_ordinary_language(text: str) -> bool:
 
       a long unbroken token          a key, a token, a hash, a URL with a secret in it
       letters mixed with digits      the shape of nearly every generated credential
-      capitals inside a word         `sk_test_REDACTEDFIXTURE`, `AKIAEXAMPLEKEY`
+      capitals inside a word         `sk_test_REDACTEDFIXTURE`, `AKIAEXAMPLEKEYID`
       mostly punctuation or symbols  base64 and hex tails
 
     What it is not: a judgement about whether the *content* is sensitive. "Your team's
