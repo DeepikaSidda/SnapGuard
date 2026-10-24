@@ -19,6 +19,19 @@ venv/
 # against without running anything first. evalset/out/NOTES.md states plainly that they
 # are synthetic.
 #
+# No images in the repository.
+#
+# Every evaluation screen is DRAWN by evalset/screens.py and hard_screens.py, so the
+# benchmark is reproducible from source without shipping a single PNG -- and a repo that
+# never carries an image cannot accidentally carry a screenshot of somebody's screen.
+# README step 11 has the two commands that regenerate them.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+
 # Scratch output from a local run is not committed.
 #
 # The prefixed patterns below are not tidiness, they are a near miss. A spike run over a

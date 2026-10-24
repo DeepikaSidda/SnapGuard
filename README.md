@@ -313,6 +313,23 @@ Useful flags:
 
 ```powershell
 python -m pytest tests -q
+```
+
+### 11. Reproduce the benchmark
+
+The twelve evaluation screens are **generated, not photographed** — every one is drawn by
+a script, so the benchmark is reproducible from source and the repository carries no
+screenshots. Draw them first:
+
+```powershell
+python evalset\screens.py          # the six original screens
+python evalset\hard_screens.py     # the six held-out screens
+```
+
+Then run the benchmark. `--skip-cloud` measures Decider alone; drop it to compare
+against Nova 2 Lite and Nova Pro on Bedrock.
+
+```powershell
 python evalset\bench.py --skip-cloud
 ```
 
