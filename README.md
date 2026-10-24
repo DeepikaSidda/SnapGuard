@@ -58,69 +58,112 @@ The gate has three possible answers, not two:
 
 ## Architecture
 
+Two things happen to every capture: something **reads** it, and Decider **judges** it.
+The reader is swappable. The judge is not.
+
 ```
-                    ┌──────────────────────────────────────┐
-                    │        YOUR MACHINE                  │
-                    │                                      │
-   screenshot ─────►│  ┌────────────────────────────────┐  │
-   or clipboard     │  │  1. FAST LANE                  │  │
-                    │  │     OCR + 13 regex patterns    │  │
-                    │  │     exact coordinates, instant │  │
-                    │  └──────────────┬─────────────────┘  │
-                    │                 │ hints              │
-                    │  ┌──────────────▼─────────────────┐  │
-                    │  │  2. STRANDS DECIDER 2B         │  │
-                    │  │     127.0.0.1:8099             │  │
-                    │  │                                │  │
-                    │  │   whole frame ──► 4 questions  │  │
-                    │  │   6x4 regions ──► 2 questions  │  │
-                    │  │                   + relevance  │  │
-                    │  │                                │  │
-                    │  │   every answer carries a       │  │
-                    │  │   calibrated confidence        │  │
-                    │  └──────────────┬─────────────────┘  │
-                    │                 │ verdict per region │
-                    │  ┌──────────────▼─────────────────┐  │
-                    │  │  3. REDACTION                  │  │
-                    │  │     cover only the cells that  │  │
-                    │  │     hold ink, keep the labels  │  │
-                    │  └──────────────┬─────────────────┘  │
-                    └─────────────────┼────────────────────┘
-                                      │
-                         only cleared regions
-                                      │
-                    ┌─────────────────▼────────────────────┐
-                    │        AMAZON BEDROCK                │
-                    │     Nova 2 Lite reads them and       │
-                    │     answers your question            │
-                    └──────────────────────────────────────┘
+                ┌──────────────────────────────────────────────┐
+                │              YOUR MACHINE                    │
+                │                                              │
+ screenshot ───►│  1. READ IT  ── where is the text? ──────┐   │
+ or clipboard   │                                          │   │
+                │     default:  RapidOCR + 13 regexes      │   │
+                │               free, stays local,         │   │
+                │               boxes per LINE             │   │
+                │                                          │   │
+                │     --aws-lane:  ┌────────────────────┐  │   │
+                │                  │ AMAZON TEXTRACT    │  │   │
+                │                  │  pixels -> words,  │  │   │
+                │                  │  a box per WORD    │  │   │
+                │                  ├────────────────────┤  │   │
+                │                  │ AMAZON COMPREHEND  │  │   │
+                │                  │  names each span:  │  │   │
+                │                  │  AWS_SECRET_KEY,   │  │   │
+                │                  │  EMAIL, NAME, SSN  │  │   │
+                │                  └────────────────────┘  │   │
+                │                                          │   │
+                │                 coordinates + hints ◄────┘   │
+                │                          │                   │
+                │  ┌───────────────────────▼────────────────┐  │
+                │  │  2. JUDGE IT    STRANDS DECIDER 2B     │  │
+                │  │                 127.0.0.1:8099         │  │
+                │  │                                        │  │
+                │  │   whole frame ──► 4 questions          │  │
+                │  │   6x4 regions ──► 2 questions          │  │
+                │  │                   + relevance          │  │
+                │  │                                        │  │
+                │  │   every answer carries a               │  │
+                │  │   calibrated confidence                │  │
+                │  └───────────────────────┬────────────────┘  │
+                │              verdict per region              │
+                │  ┌───────────────────────▼────────────────┐  │
+                │  │  3. COVER IT                           │  │
+                │  │     paint only the cells holding ink,  │  │
+                │  │     leave the labels readable          │  │
+                │  └───────────────────────┬────────────────┘  │
+                └──────────────────────────┼───────────────────┘
+                                           │
+                              only cleared regions
+                                           │
+                       ┌───────────────────▼──────────────────┐
+                       │          AMAZON BEDROCK              │
+                       │     Nova 2 Lite reads them and       │
+                       │     answers your question            │
+                       └──────────────────────────────────────┘
 ```
+
+**Why the split matters.** Textract and Comprehend answer *what is on screen and where*.
+Neither can answer *may this leave the machine* — that is not a property of the text. On
+the first capture it was tried on, Comprehend labelled "Madurai" an `ADDRESS` at 0.67,
+because it was part of the phrase "AWS User Group Madurai". It names spans; Decider
+decides.
 
 ### The same flow, as a diagram
 
 ```mermaid
 flowchart TD
-    A[Screenshot or clipboard image] --> B[Fast lane: OCR + regex]
-    B -->|exact coordinates| C{Strands Decider 2B<br/>on 127.0.0.1}
+    A[Screenshot or clipboard image] --> READ
 
-    C --> D[Whole frame:<br/>private conversation?<br/>financial records?<br/>identity document?<br/>contact sheet?]
-    C --> E[Each of 24 regions:<br/>credential?<br/>contact details?<br/>relevant to the question?]
+    subgraph READ["1 - READ IT: where is the text?"]
+        direction LR
+        B["RapidOCR + 13 regexes<br/>default, free, local<br/>boxes per line"]
+        T["Amazon Textract<br/>pixels to words<br/>a box per word"]
+        CM["Amazon Comprehend<br/>names each span<br/>AWS_SECRET_KEY, EMAIL, NAME"]
+        T --> CM
+    end
+
+    READ -->|coordinates and hints| C
+
+    subgraph JUDGE["2 - JUDGE IT: may it leave?"]
+        C{{"Strands Decider 2B<br/>127.0.0.1:8099<br/>every answer has a<br/>calibrated confidence"}}
+        C --> D["Whole frame, 4 questions:<br/>private conversation?<br/>financial records?<br/>identity document?<br/>contact sheet?"]
+        C --> E["Each of 24 regions:<br/>credential?<br/>contact details?<br/>relevant to the question?"]
+    end
 
     D --> F{Compose verdict}
     E --> F
 
     F -->|PASS| G[Send unchanged]
-    F -->|REDACT| H[Mesh: cover the cells<br/>holding ink, reveal labels]
-    F -->|WITHHOLD| I[Nothing leaves.<br/>Original quarantined locally]
+    F -->|REDACT| H["3 - COVER IT<br/>paint only the cells holding ink,<br/>leave the labels readable"]
+    F -->|WITHHOLD| I["Nothing leaves<br/>Original quarantined locally"]
 
-    G --> J[Amazon Bedrock<br/>Nova 2 Lite]
+    G --> J[["Amazon Bedrock<br/>Nova 2 Lite"]]
     H --> J
-    J --> K[Answer, plus a note on<br/>what could not be seen]
+    J --> K["Answer, plus a note on<br/>what could not be seen"]
 
-    style C fill:#ff9900,stroke:#333,color:#000
-    style J fill:#232f3e,stroke:#333,color:#fff
-    style I fill:#2e8b57,stroke:#333,color:#fff
+    style C fill:#ff9900,stroke:#232f3e,stroke-width:2px,color:#000
+    style T fill:#ff9900,stroke:#232f3e,color:#000
+    style CM fill:#ff9900,stroke:#232f3e,color:#000
+    style J fill:#232f3e,stroke:#232f3e,color:#fff
+    style I fill:#2e8b57,stroke:#1f6b41,color:#fff
+    style B fill:#eef1f6,stroke:#8a93a5,color:#222
 ```
+
+The reader on the left is the default and never leaves your machine. The two AWS services
+on the right are the `--aws-lane` alternative: they read small text the local engine
+cannot and return a box per **word** rather than per line, which is what lets a heading
+stay visible while the key beside it is covered. Either way the arrow out of the box is
+the same — **Decider decides**.
 
 ---
 
