@@ -56,11 +56,6 @@ The gate has three possible answers, not two:
 
 ## Architecture
 
-![SnapGuard architecture](docs/architecture.png)
-
-Drawn by [`docs/make_architecture.py`](docs/make_architecture.py) — a diagram that is a
-script can be corrected when the architecture changes.
-
 Two things happen to every capture: something **reads** it, and Decider **judges** it.
 The reader is swappable. The judge is not.
 

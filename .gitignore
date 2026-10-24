@@ -32,12 +32,6 @@ venv/
 *.webp
 *.bmp
 
-# One exception: the architecture diagram, because a README that explains a privacy tool
-# should show its trust boundary rather than describe it. It is drawn by
-# docs/make_architecture.py and contains no screen content, so none of the reasoning
-# above applies to it.
-!docs/architecture.png
-
 # Scratch output from a local run is not committed.
 #
 # The prefixed patterns below are not tidiness, they are a near miss. A spike run over a
