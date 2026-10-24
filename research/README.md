@@ -1223,3 +1223,74 @@ that notices when they change.
 Four coverage numbers had to be re-measured to find this one. The cheap version of the
 same check — "which earlier decisions had their premise removed by what I just shipped?"
 — would have found it in a minute, and is the thing I did not do.
+
+---
+
+## 19. Six reports, and the last one was not about the secret at all
+
+The complaint "it covers too much" was made six times. The first four were about the
+secret's own box and were fixed by, in order: a finer grid, the mesh, a smaller mesh cell,
+and revealing labels. By the sixth, the key itself was a single 557x25px bar in exactly
+the right place, and what was left was **furniture**: a stripe down a card border, small
+bars under an input field, a block over an icon.
+
+Everything in that list is the gradient test correctly calling something "not background"
+that is also not writing.
+
+### Three rounds of tuning, and why they were the wrong move
+
+| attempt | what it tested | why it failed |
+|---|---|---|
+| drop narrow tall boxes | width | dilation grows a 1-cell core to 18px, which is also three characters |
+| drop flat elongated boxes | row-mean spread | caught the obvious ones |
+| drop them even when touching | removed the isolation guard | caught more, still not these |
+
+The measured reason it kept not working, from the reported capture:
+
+```
+  border   (54, 264, 78, 356)   24x92   elongation 3.8   flatness 7.42
+  border   (54, 162, 78, 240)   24x78   elongation 3.2   flatness 7.42
+  key bar  (96, 310, 660, 336) 564x26   elongation 21.7  flatness 24.79
+```
+
+Those separate — but only once you have seen this screenshot. The thresholds that split
+3.8 from 21.7 are thresholds fitted to one capture, which is the error of sections 10 to
+13 restated. A fourth round would have found a fourth number.
+
+### The information was already in hand
+
+Textract returns a box per **word**. Once the cloud lane has run, *where the text is* is
+known rather than inferred, and the question stops being "does this ink look like
+writing" — a question about shape, badly posed — and becomes "is this ink inside a word
+box", which is a lookup.
+
+| mesh over | covered | boxes | leak |
+|---|---|---|---|
+| all ink | 1.95% | 6 | none |
+| **ink inside word boxes** | **1.32%** | **3** | **none** |
+
+The stripe, the underlines and most of the icon disappear, and the control string stays
+readable.
+
+### What this costs, and why it is not the default
+
+A credential Textract fails to read is in no word box, so the mesh would not cover it.
+That is a real transfer of trust from "every non-background pixel" to "whatever the
+recogniser saw", and it is the same bet that was wrong in section 15 — where narrowing to
+the *scanner's* hits left three credentials legible, because rapidocr had found one of
+four.
+
+What makes it acceptable here is only that it is measured. Textract found 4 of 4
+credentials on the demo fixture and 1 of 1 on the reported capture at confidence 1.00,
+where rapidocr found 1 of 4 and 0 of 1. So the parameter defaults to `None`: the local
+path still covers every inked pixel and makes no assumption about a recogniser, and the
+word-box restriction only applies when `--aws-lane` has actually produced words.
+
+### What is still covered and should not be
+
+Two boxes of about 900px² each: the key-emoji icon beside the heading, and the word "AI"
+in the body text. Both are the whitelist refusing to reveal — the icon is not language,
+and `AI` came back from Textract under the 90% confidence floor. The fix is to lower that
+floor for very short tokens, and it has not been done on purpose: a two-character token
+read with low confidence is also what a PIN looks like, and section 14 already documents
+short low-entropy secrets as this feature's standing weakness.
