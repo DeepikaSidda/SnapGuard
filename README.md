@@ -1,18 +1,37 @@
 # Aperture
 
-**Share your screen with an AI without handing over your secrets.**
+**Share a screenshot without sharing your secrets.**
 
-You paste a screenshot into a chat assistant to ask why your deploy is failing. The
-answer is in the terminal on the left. The access key in the editor on the right goes
-along for the ride.
+Something has gone wrong, so you grab a screenshot and send it to a friend, drop it in
+Slack, attach it to a ticket, or paste it into a chat assistant. The error you wanted to
+show is in the terminal on the left. The access key sitting in the editor on the right
+goes along for the ride.
 
 Aperture puts a decision in between. **Strands Decider 2B** runs on your own machine,
-looks at your screen region by region, and decides what may leave. Only the clean,
-relevant parts reach **Amazon Bedrock**.
+looks at your screen region by region, and decides what may leave. The key gets covered.
+Everything you actually meant to share stays readable.
 
 ```
 56% of a screen covered  ->  1.2%, one box, on the line that holds the key
 ```
+
+## When you would use it
+
+**Sending an error to a colleague.** Run `aperture guard`, take your screenshot, and
+paste it anywhere — Slack, WhatsApp, Teams, email, a Jira ticket, a GitHub issue, a
+Stack Overflow question. Your clipboard already holds the safe version by the time you
+paste. It never has to know where the image is going.
+
+**Asking a cloud model about your screen.** `aperture ask` gives a Strands agent on
+Amazon Bedrock only the regions that are both safe *and* relevant to your question — on
+the demo screen, three regions of twenty-four.
+
+**Pair programming, demos, live streams.** Arm it for an hour with `aperture guard
+--for 60` and every screenshot you take in that window is checked before it can be
+pasted.
+
+The common thread: the moment you paste is the moment a secret escapes, and that is the
+moment this closes.
 
 ---
 
@@ -262,12 +281,25 @@ problem, and said which parts it could not see.
 
 ### 9. Guard your clipboard
 
+This is the one to use when you are sending a screenshot to a person.
+
 ```powershell
 aperture guard
 ```
 
-Now take a screenshot with `Win+Shift+S`. The image is held, inspected, and a safe
-version is put back. Useful flags:
+Now take a screenshot with `Win+Shift+S` and paste it wherever you were going to —
+Slack, WhatsApp, a ticket, an email. The image is held the instant it appears, inspected,
+and a safe version is put back on your clipboard, so what you paste is already clean.
+
+```
+[16:32:58] image on clipboard, 1920x1080
+[16:33:14] regex  aws_access_key_id (AKIA...(20 chars)) at (411, 134, 1016, 169)
+[16:36:19] decider credential=0.758 on tile 1 -> redact
+[16:36:19] mesh   kept 10% of the flagged area
+[16:36:20] REDACTED  3 box(es), 2% of the frame
+```
+
+Useful flags:
 
 | flag | effect |
 |---|---|
