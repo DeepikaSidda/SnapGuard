@@ -221,8 +221,50 @@ def ordinary_language_boxes(
     return [
         box
         for text, box, score in read_text_runs(image)
-        if score >= min_confidence and looks_like_ordinary_language(text)
+        if score >= confidence_floor_for(text, min_confidence)
+        and looks_like_ordinary_language(text)
     ]
+
+
+# Below this many characters, a pure-letter token gets a lower confidence bar. See
+# `confidence_floor_for`.
+SHORT_TOKEN = 4
+SHORT_TOKEN_CONFIDENCE = 55.0
+
+
+def confidence_floor_for(text: str, default: float) -> float:
+    """How confidently a line must have been read before it may be left visible.
+
+    Short words are where OCR is least sure, and the default floor was covering them.
+    Measured on a real capture, with the floor at 90:
+
+        'AWS'  read at 50.0, correct, covered
+        'Al'   read at 73.2, correct, covered   (the page says "AI")
+        every ordinary long word   above 99
+
+    So a heading kept a black square stamped over one word of it, twice, which is the
+    over-covering complaint at its smallest scale.
+
+    The relaxation is restricted to tokens of four characters or fewer that are *all
+    letters*, and that restriction is the entire safety argument. The thing being
+    protected against is a short low-entropy secret -- a PIN, a door code, a short
+    password -- and those contain digits or symbols, so they keep the full floor. What
+    this lets through is `AI`, `AWS`, `ID`, `OK`, `No`, `Copy`, `Hide`: four letters of
+    pure alphabet is 457,000 possibilities and nothing anybody issues as a credential.
+
+    Still a weakening, and the honest version of the limitation already in §14: a
+    four-letter all-alphabetic password like `pass` would now be revealed at 55%
+    confidence where before it needed 90%. `--cover-labels` turns the whole mechanism
+    off.
+    """
+    tokens = [t for t in text.split() if t]
+    if (
+        len(tokens) == 1
+        and len(tokens[0]) <= SHORT_TOKEN
+        and tokens[0].isalpha()
+    ):
+        return min(default, SHORT_TOKEN_CONFIDENCE)
+    return default
 
 
 # --------------------------------------------------------------------------- the scan

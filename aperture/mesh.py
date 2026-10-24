@@ -231,16 +231,20 @@ def _cells_touching(
 ) -> np.ndarray:
     """Cells overlapping any of `boxes`, in the cropped frame's coordinates.
 
-    Overlap rather than containment, and padded outward by a cell: a word box hugs its
-    glyphs, and the point here is to keep everything a glyph touches.
+    Overlap rather than containment, and grown by `REVEAL_PAD` PIXELS rather than by a
+    whole cell. The difference showed up on a real capture: padding by a cell each side
+    is 12px of slack at the default, which reached past the end of the word "Your" and
+    pulled in the key-shaped icon beside the heading, so a black square was stamped over
+    an icon that holds nothing. A few pixels is enough for an anti-aliased glyph edge
+    sitting just outside its own box, which is all the padding was for.
     """
     hit = np.zeros((rows, columns), dtype=bool)
     offset_x, offset_y = origin
     for left, top, right, bottom in boxes:
-        first_c = max(0, (left - offset_x) // cell - 1)
-        last_c = min(columns - 1, (right - offset_x) // cell + 1)
-        first_r = max(0, (top - offset_y) // cell - 1)
-        last_r = min(rows - 1, (bottom - offset_y) // cell + 1)
+        first_c = max(0, (left - offset_x - REVEAL_PAD) // cell)
+        last_c = min(columns - 1, (right - offset_x + REVEAL_PAD) // cell)
+        first_r = max(0, (top - offset_y - REVEAL_PAD) // cell)
+        last_r = min(rows - 1, (bottom - offset_y + REVEAL_PAD) // cell)
         if last_c < first_c or last_r < first_r:
             continue
         hit[first_r : last_r + 1, first_c : last_c + 1] = True

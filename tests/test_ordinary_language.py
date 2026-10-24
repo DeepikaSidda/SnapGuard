@@ -146,3 +146,48 @@ def test_known_limitation_a_short_all_caps_token_is_revealed():
 def test_nothing_readable_is_not_revealed(text: str):
     """Fail closed: if there is no readable text, there is no reason to reveal."""
     assert not ordinary(text)
+
+
+# ---- the confidence floor for short words -----------------------------------
+
+
+def test_short_pure_letter_words_get_a_lower_floor():
+    """Measured: Textract read 'AWS' at 50% and 'Al' at 73%, both correctly.
+
+    Short uppercase words are where OCR is least certain, so a 90% floor stamped a black
+    square over one word of a heading. Twice.
+    """
+    from aperture.scanner import confidence_floor_for
+
+    for token in ("AI", "AWS", "ID", "OK", "Copy", "Hide", "Free"):
+        assert confidence_floor_for(token, 90.0) < 90.0, token
+
+
+def test_anything_with_a_digit_keeps_the_full_floor():
+    """The safety argument. A short secret -- a PIN, a door code -- has digits in it."""
+    from aperture.scanner import confidence_floor_for
+
+    for token in ("1234", "0000", "a1b2", "99", "sk_1", "pin7"):
+        assert confidence_floor_for(token, 90.0) == 90.0, token
+
+
+def test_long_words_keep_the_full_floor():
+    from aperture.scanner import confidence_floor_for
+
+    for token in ("allowance", "hunter2xyz", "wJalrXUtnFEMI"):
+        assert confidence_floor_for(token, 90.0) == 90.0, token
+
+
+def test_a_phrase_keeps_the_full_floor():
+    """The relaxation is for a single short token, not for any short line."""
+    from aperture.scanner import confidence_floor_for
+
+    assert confidence_floor_for("a b", 90.0) == 90.0
+    assert confidence_floor_for("Your team's API key", 90.0) == 90.0
+
+
+def test_the_floor_is_never_raised():
+    """A caller passing a low default must not have it pushed up by this."""
+    from aperture.scanner import confidence_floor_for
+
+    assert confidence_floor_for("AI", 30.0) == 30.0

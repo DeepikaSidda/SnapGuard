@@ -387,12 +387,13 @@ def reveal_boxes(reading: Reading) -> list[Box]:
     word was above 99%, so the confidence floor is doing real work here and not just
     paperwork.
     """
-    from .scanner import looks_like_ordinary_language
+    from .scanner import confidence_floor_for, looks_like_ordinary_language
 
     return [
         word.box
         for word in reading.words
-        if word.confidence >= 90.0 and looks_like_ordinary_language(word.text)
+        if word.confidence >= confidence_floor_for(word.text, 90.0)
+        and looks_like_ordinary_language(word.text)
     ]
 
 
