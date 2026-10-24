@@ -191,3 +191,54 @@ def test_the_floor_is_never_raised():
     from aperture.scanner import confidence_floor_for
 
     assert confidence_floor_for("AI", 30.0) == 30.0
+
+
+# ---- filenames and identifiers ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Deepu_accessKeys .csv",
+        "production.env",
+        "aperture_gate.egg-info",
+        "test_ordinary_language.py",
+        "pyproject.toml",
+        "DEMO_SCRIPT.md",
+        "requirements-dev.txt",
+        "src/aperture/mesh.py",
+        "looks_like_ordinary_language",
+        "MAX_FRACTION",
+        "read_text_runs",
+    ],
+)
+def test_filenames_and_identifiers_are_revealed(text: str):
+    """A user spotted this: the tab name `Deepu_accessKeys .csv` was covered while the
+    identical filename stayed visible in the sidebar beside it.
+
+    The length veto is a proxy for entropy and a filename beats it by being long. Judging
+    the parts between separators keeps the veto pointed at key material, which does not
+    break into short word-like pieces.
+    """
+    assert ordinary(text), f"would have been covered: {text!r}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "sk_test_REDACTEDFIXTURE",
+        "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI",
+        "dcd_live_EXAMPLEa1B2c3D4e5F6g7H8i9J0kL1mN2oP3qR4sT5uV6wX7",
+        "/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "ghp_EXAMPLE000000000000000000000000000",
+        "xoxb-EXAMPLE-0000-000000000",
+    ],
+)
+def test_separators_do_not_smuggle_a_key_through(text: str):
+    """The risk the split introduces, asserted directly.
+
+    Splitting on separators must not turn a key into a list of harmless pieces. It does
+    not, because at least one piece of real key material is always long, mixed
+    letters-and-digits, or scattered with capitals.
+    """
+    assert not ordinary(text), f"would have been revealed: {text!r}"

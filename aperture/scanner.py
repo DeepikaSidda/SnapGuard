@@ -165,41 +165,74 @@ def looks_like_ordinary_language(text: str) -> bool:
         return False
 
     for token in tokens:
-        core = token.strip(".,:;!?()[]{}<>'\"`|/\\-_=+*%&#@~^·•")
-        if not core:
+        outer = token.strip(".,:;!?()[]{}<>'\"`|/\\-_=+*%&#@~^·•")
+        if not outer:
             continue
-
-        letters = sum(c.isalpha() for c in core)
-        digits = sum(c.isdigit() for c in core)
 
         # Plain numbers, including thousands separators and decimals, are fine.
-        if not letters and core.replace(",", "").replace(".", "").isdigit():
+        if not any(c.isalpha() for c in outer) and outer.replace(",", "").replace(
+            ".", ""
+        ).isdigit():
             continue
 
-        if len(core) > 14:
-            return False
-        if letters and digits and len(core) > 5:
-            return False
-        if letters / len(core) < 0.6:
-            return False
+        # Judge the PARTS between separators, not the whole run.
+        #
+        # The vetoes below are all proxies for entropy, and a filename defeats every one
+        # of them by being long: `Deepu_accessKeys` is sixteen characters, so the length
+        # test covered it -- while the identical filename stayed visible in the editor's
+        # sidebar, because that region was not flagged. A user spotted the inconsistency,
+        # which is the right way to notice that a rule is arbitrary.
+        #
+        # Splitting first keeps every veto working on the thing it was written for, since
+        # key material does not break into short word-like pieces:
+        #
+        #   Deepu_accessKeys .csv        -> Deepu | accessKeys | csv       all fine
+        #   sk_test_REDACTEDFIXTURE     -> sk | live | 51H8xQ2eZvKYlo2C    last rejected
+        #   AWS_SECRET_ACCESS_KEY=wJa..  -> ... | wJalrXUtnFEMI            stray capitals
+        #   AKIAIOSFODNN7EXAMPLE         -> one part, 20 chars             length
+        #
+        # It also stops covering ordinary snake_case identifiers in source code, which
+        # was the same fault wearing different clothes.
+        for core in re.split(r"[._/\-]+", outer):
+            if not core or not _part_looks_like_language(core):
+                return False
 
-        # Scattered capitals, which is the shape of `wJalrXUtnFEMI`. Counted rather than
-        # merely detected, because two earlier versions of this rule were both wrong:
-        #
-        #   "any capital after the first" rejected `GitHub`, `PayPal` and `macOS`, so
-        #   the sentence "don't commit it to GitHub" was covered as a suspected secret.
-        #
-        #   adding an exemption for short tokens did not help either, because the thing
-        #   being measured was never length. `API` misread by OCR as `APl` has one
-        #   stray capital; a key has seven.
-        #
-        # So: up to two capitals outside the first position is a product name, more is
-        # entropy. Everything longer is already rejected above -- over 14 characters by
-        # length, letters mixed with digits by the second test, base64 and hex tails by
-        # the third -- so this only has to separate CamelCase words from key material.
-        strays = sum(1 for c in core[1:] if c.isupper())
-        if strays > 2 and core != core.upper():
-            return False
+    return True
+
+
+def _part_looks_like_language(core: str) -> bool:
+    """One separator-free piece of a token. See `looks_like_ordinary_language`."""
+    letters = sum(c.isalpha() for c in core)
+    digits = sum(c.isdigit() for c in core)
+
+    # A bare number between separators -- a version, a port, a date part.
+    if not letters:
+        return core.replace(",", "").isdigit()
+
+    if len(core) > 14:
+        return False
+    if digits and len(core) > 5:
+        return False
+    if letters / len(core) < 0.6:
+        return False
+
+    # Scattered capitals, which is the shape of `wJalrXUtnFEMI`. Counted rather than
+    # merely detected, because two earlier versions of this rule were both wrong:
+    #
+    #   "any capital after the first" rejected `GitHub`, `PayPal` and `macOS`, so the
+    #   sentence "don't commit it to GitHub" was covered as a suspected secret.
+    #
+    #   adding an exemption for short tokens did not help either, because the thing
+    #   being measured was never length. `API` misread by OCR as `APl` has one stray
+    #   capital; a key has seven.
+    #
+    # So: up to two capitals outside the first position is a product name, more is
+    # entropy. Everything longer is already rejected above -- over 14 characters by
+    # length, letters mixed with digits by the second test, base64 and hex tails by the
+    # third -- so this only has to separate CamelCase words from key material.
+    strays = sum(1 for c in core[1:] if c.isupper())
+    if strays > 2 and core != core.upper():
+        return False
 
     return True
 
