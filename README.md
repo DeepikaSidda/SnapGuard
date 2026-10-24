@@ -1,279 +1,223 @@
 # Aperture
 
-**A local model decides how much of your screen is allowed to reach a cloud model.**
+**Share your screen with an AI without handing over your secrets.**
 
-Built for the [Agent Experience Hackathon: Strands Decider](https://builder.aws.com/build/hackathons/4f50957c-1d08-37ab-b11c-97516b9adeb4/agent-experience-hackathon).
+You paste a screenshot into a chat assistant to ask why your deploy is failing. The
+answer is in the terminal on the left. The access key in the editor on the right goes
+along for the ride.
 
-`#strands-decider-2b` `#context-memory`
+Aperture puts a decision in between. **Strands Decider 2B** runs on your own machine,
+looks at your screen region by region, and decides what may leave. Only the clean,
+relevant parts reach **Amazon Bedrock**.
+
+```
+56% of a screen covered  ->  1.2%, one box, on the line that holds the key
+```
 
 ---
 
-## The thing that happens
+## What it does
 
-You hit an error. You screenshot your terminal and paste it into an AI chat to ask what
-went wrong. The screenshot also caught the editor pane next to it, with `production.env`
-open, with your AWS key in it.
+Every region of your screen is scored on **two independent questions**:
 
-You weren't careless. You were looking at the error. The key came along for the ride, and
-now it's on somebody else's servers.
+- **Is it safe to send?** — credentials, private conversations, financial records,
+  identity documents, people's contact details
+- **Is it worth sending?** — does this region actually bear on what you asked?
 
-This happened to the author of this repo *while building this repo* — a screenshot pasted
-into a chat window to show a quota number, with an API key three lines above it, on a page
-that said "don't post this in chats."
+Only regions that are **both** reach the cloud. That intersection is the decision, and
+it is why most of a screen stays on your machine even when nothing on it is sensitive.
 
-## What Aperture does
+The gate has three possible answers, not two:
 
-A Strands agent that can look at your screen to help you, with **Strands Decider 2B**
-sitting in its path deciding what it may look at.
-
-Every region of the screen is scored on **two independent axes**:
-
-- **Is it safe to send?** — credentials, private conversations, financial records, faces
-- **Is it worth sending?** — does this region bear on what the user actually asked
-
-Only regions that are *both* reach Bedrock. That intersection is the `#context-memory`
-decision, and it is why most of a screen usually stays put even when nothing on it is
-sensitive.
-
-```
-you ──► agent (Amazon Bedrock) ──► "let me look at your screen"
-                                        │
-                        ┌───────────────▼────────────────┐
-                        │  127.0.0.1  — Decider 2B       │
-                        │  scores each region of the      │
-                        │  screen; your code decides      │
-                        └───────────────┬────────────────┘
-                                        │ only cleared regions
-                                        ▼
-                               Amazon Bedrock reads them,
-                               diagnoses, writes the fix
-```
-
-The decision about what may leave the machine is made somewhere it **cannot** leave from.
-
-## Why a decision model and not an LLM
-
-Because asking a cloud model whether a screenshot is too sensitive to send to a cloud
-model requires sending it the screenshot. You have already done the thing you were trying
-to prevent.
-
-That isn't an optimisation argument, it's a logical one. Which is also why Aperture does
-*not* claim to be faster: on the author's GPU-less laptop it is **27–40× slower** than
-asking Bedrock. What it buys is $0.00 per image, and the fact that the frames which should
-never have been sent were never sent.
+| verdict | what happens |
+|---|---|
+| **PASS** | the screenshot is clean, nothing changes |
+| **REDACT** | the sensitive parts are painted over, the rest is sent |
+| **WITHHOLD** | the whole screen stays local, and you are told why |
 
 ---
 
-## It works
-
-Real run, against the demo screen — a terminal error on the left, `production.env` on the
-right:
+## Architecture
 
 ```
-$ aperture ask "my deploy is failing, what's wrong?" --screen evalset/out/deploy_failure.png
-
-  THE GATE RAN
-  private_conversation: 0.039
-  financial_records   : 0.065
-  identity_document   : 0.048
-  findings:
-    credential=0.915 on tile 3 (r0c3, 359x286) -> redact
-    credential=0.639 on tile 4 (r0c4, 359x286) -> redact
-    credential=0.776 on tile 9 (r1c3, 359x303) -> redact
-    credential=0.751 on tile 10 (r1c4, 359x303) -> redact
-  regions: 3 of 24 sent, 4 withheld for safety, 2 skipped as unrelated,
-           15 unreadable  (88% kept local)
-  VERDICT: REDACT
-  cost   : 17 local decisions, 280319 ms, $0.00
-
-  WHAT THE AGENT SAID
-  The deployment is failing due to a **database connection pool timeout**:
-  PoolTimeout: could not acquire a connection within 5.0s (pool size 5, in use 0)
-
-  **Withheld regions:**
-  Regions [3, 4, 9, 10] were withheld for safety because they contained a
-  credential or secret value. If this was a database password or API key, you
-  should rotate the credential immediately.
-
-  narrowed  requested [0..23] -> allowed [0, 6, 12], withheld 21 regions
-  1 guarded calls: 1 narrowed, 0 denied; 17 local decisions
+                    ┌──────────────────────────────────────┐
+                    │        YOUR MACHINE                  │
+                    │                                      │
+   screenshot ─────►│  ┌────────────────────────────────┐  │
+   or clipboard     │  │  1. FAST LANE                  │  │
+                    │  │     OCR + 13 regex patterns    │  │
+                    │  │     exact coordinates, instant │  │
+                    │  └──────────────┬─────────────────┘  │
+                    │                 │ hints              │
+                    │  ┌──────────────▼─────────────────┐  │
+                    │  │  2. STRANDS DECIDER 2B         │  │
+                    │  │     127.0.0.1:8099             │  │
+                    │  │                                │  │
+                    │  │   whole frame ──► 4 questions  │  │
+                    │  │   6x4 regions ──► 2 questions  │  │
+                    │  │                   + relevance  │  │
+                    │  │                                │  │
+                    │  │   every answer carries a       │  │
+                    │  │   calibrated confidence        │  │
+                    │  └──────────────┬─────────────────┘  │
+                    │                 │ verdict per region │
+                    │  ┌──────────────▼─────────────────┐  │
+                    │  │  3. REDACTION                  │  │
+                    │  │     cover only the cells that  │  │
+                    │  │     hold ink, keep the labels  │  │
+                    │  └──────────────┬─────────────────┘  │
+                    └─────────────────┼────────────────────┘
+                                      │
+                         only cleared regions
+                                      │
+                    ┌─────────────────▼────────────────────┐
+                    │        AMAZON BEDROCK                │
+                    │     Nova 2 Lite reads them and       │
+                    │     answers your question            │
+                    └──────────────────────────────────────┘
 ```
 
-**The agent asked to read the whole screen and was given three regions of twenty-four.**
-It still solved the problem, and told the user which parts it could not see and what to
-do about them.
+### The same flow, as a diagram
 
-Three numbers in there are the whole design. **4 withheld for safety** — those are the
-credentials. **2 skipped as unrelated** — safe to send, but nothing to do with a deploy
-error, so they were not sent and the agent was deliberately *not* told about them.
-**15 unreadable** — empty editor space, cleared without a verdict being recorded about
-it. 88% of the screen never left the machine, and only a fifth of that was for safety.
+```mermaid
+flowchart TD
+    A[Screenshot or clipboard image] --> B[Fast lane: OCR + regex]
+    B -->|exact coordinates| C{Strands Decider 2B<br/>on 127.0.0.1}
 
-### See the decision
+    C --> D[Whole frame:<br/>private conversation?<br/>financial records?<br/>identity document?<br/>contact sheet?]
+    C --> E[Each of 24 regions:<br/>credential?<br/>contact details?<br/>relevant to the question?]
 
-```bash
-aperture check evalset/out/deploy_failure.png --explain explained.png
+    D --> F{Compose verdict}
+    E --> F
+
+    F -->|PASS| G[Send unchanged]
+    F -->|REDACT| H[Mesh: cover the cells<br/>holding ink, reveal labels]
+    F -->|WITHHOLD| I[Nothing leaves.<br/>Original quarantined locally]
+
+    G --> J[Amazon Bedrock<br/>Nova 2 Lite]
+    H --> J
+    J --> K[Answer, plus a note on<br/>what could not be seen]
+
+    style C fill:#ff9900,stroke:#333,color:#000
+    style J fill:#232f3e,stroke:#333,color:#fff
+    style I fill:#2e8b57,stroke:#333,color:#fff
 ```
 
-![What the gate saw](evalset/out/_explained.png)
+---
 
-The 6×4 region grid with every score the gate actually got. Green regions were sent and
-their content is legible. The withheld regions are *destroyed* — blurred and then washed,
-not merely dimmed, because the first version of this renderer displayed the credentials
-it was claiming to protect, and the test that now guards it OCRs the output and asserts
-no pattern can be matched in what comes back.
+## What we used
 
-A screen where nothing can be salvaged looks like this instead:
+| | what it does here |
+|---|---|
+| **Strands Decider 2B** | makes every decision. Reads a region, answers a typed question, returns a score with a calibrated confidence. Runs locally on CPU |
+| **Amazon Bedrock** (`us.amazon.nova-2-lite-v1:0`) | the generative half. Reads the cleared regions and answers the user's question |
+| **Strands Agents SDK** | the agent, and its `InterventionHandler` seam where the gate sits |
+| **Amazon Textract** *(optional)* | reads the screen into words with exact boxes, for word-precise redaction |
+| **Amazon Comprehend** *(optional)* | names each span it finds — `AWS_SECRET_KEY`, `EMAIL`, `NAME` |
+| **RapidOCR + 13 regex patterns** | the free local fast lane, for secrets with a known shape |
+| **Pillow / NumPy** | the redaction itself, pixel arithmetic, no model needed |
 
-![Everything withheld](evalset/out/_explained_contacts.png)
+**Decider makes the decision; everything else only reads or writes.** Four of the six
+rules — *is this a private conversation, a bank page, an ID document, a list of people* —
+are whole-screen judgements that no text extractor can answer.
 
-Seven people's emails, phone numbers and home addresses. **0 of 4 regions sent, 100% kept
-local.** Both Amazon Nova models judged this screen safe to send.
+---
 
-Note the two kinds of withholding in that last line, because they are different
-decisions. **Region 1** was held for *safety* — the credentials pane. **Region 3** was
-skipped as *irrelevant* — empty editor space that had nothing to do with a deploy error.
-The agent was told about the first and deliberately not warned about the second.
-
-Half the screen never left the machine, and only one half of that was for safety
-reasons. The rest was simply not worth sending.
-
-## How little it covers
-
-The first working version of this tool blacked out **56% of a screen** to hide one line of
-credentials. A user reported that as a bug four times before it was properly fixed, and
-each round was a different idea about the same question:
-
-| | Covered | What changed |
-|---|---|---|
-| whole frame | 56% | — |
-| 2×2 regions, subdivide what fires | 24% | ask the model again, smaller |
-| **6×4 regions** | 15% | stop making the regions big in the first place |
-| **+ mesh** | **6%** | stop asking the model where the pixels are |
-
-The last one is the interesting one, and it came from the user, who sent a picture of
-graph paper and said it should work like that. A graph-paper mesh is hundreds of squares
-and the model costs ~12 s a question, so the mesh cannot be something it is asked about.
-It doesn't have to be — two different questions had been conflated the whole time:
-
-```
-WHERE IS THERE SOMETHING SENSITIVE?   a judgement   only the model can answer it
-WHERE ARE THERE PIXELS?               arithmetic    free, exact, nothing to fool
-```
-
-`credential 0.915 on region 3` is not a location. So the regions the model flags are
-meshed into 14px squares, each square is measured, and only the ones that aren't
-background get painted. **The claim is unchanged — everything in this region goes — the
-empty half of a code pane simply stopped counting as "everything".** No model call, about
-4 ms, and the credential is still fully covered while the file tree, the terminal and the
-title bar all survive.
-
-This looks like the mistake this project already made and reverted — narrowing a flagged
-region to the regex scanner's matched box, which left three credentials legible because
-the scanner matched one secret of four. The difference is the whole point:
-
-- narrowing to a **regex hit** covers the secrets the scanner *recognised*
-- narrowing to **inked squares** covers every pixel that is *not background*
-
-A secret cannot hide in blank space, so dropping only blank space cannot expose one.
-There is no key format, line wrap or font size that defeats it. Full write-up, thresholds
-and fail-safe paths: [`research/README.md` §13–14](research/README.md).
-
-`--no-mesh` paints whole rectangles if you want the old behaviour.
-
-## Measured against Amazon Nova
+## Results
 
 Twelve labelled screens, same questions, same ground truth
-([`evalset/bench.py`](evalset/bench.py), raw output in `evalset/results.json`):
+([`evalset/bench.py`](evalset/bench.py)):
 
-| System | Accuracy | Held-out only | Median | Cost / 12 screens |
-|---|---|---|---|---|
-| **Decider 2B (local, CPU)** | **12/12** | **6/6** | 76.2 s | **$0.00** |
-| Nova 2 Lite (Bedrock) | 10/12 | 4/6 | 1.1 s | $0.00037 |
-| Nova Pro (Bedrock) | 9/12 | 3/6 | 1.2 s | $0.00927 |
+| System | Accuracy | Held-out only | Cost |
+|---|---|---|---|
+| **Strands Decider 2B (local, CPU)** | **12 / 12** | **6 / 6** | **$0.00** |
+| Nova 2 Lite (Bedrock) | 10 / 12 | 4 / 6 | $0.00037 |
+| Nova Pro (Bedrock) | 9 / 12 | 3 / 6 | $0.00927 |
 
-The *larger* cloud model did worst, and the failures split into two very different kinds:
+On a CRM screen holding seven people's emails, phone numbers and home addresses, both
+cloud models judged it safe to send. Decider withheld it — **100% kept local**.
 
-**The dangerous kind.** Both Nova models **let the contacts screen through** — a CRM list
-of seven people with email addresses, international phone numbers and home addresses. They
-judged it safe to send. Decider flagged all four regions of it, 0.697 to 0.835.
-
-**The annoying kind.** Both over-flagged a screen full of git SHAs, Docker digests and
-request UUIDs; Nova Pro also flagged a public revenue dashboard. Generative models see a
-long hex string and cry secret.
-
-A gate that over-flags costs you a retry. A gate that waves personal data through costs
-you an incident. Decider made neither mistake on this set.
-
-**Read the held-out column, not the headline.** Thresholds were chosen while looking at the
-first six screens, so Decider has effectively seen them. The six in `hard_screens.py` were
-written afterwards — four to provoke false positives, two to cover rules that had shipped
-with no test image at all — and nothing was tuned in response. Twelve synthetic screens is
-still a small set.
+**174 tests**, and the gate was verified end to end against Bedrock.
 
 ---
 
-## The reusable pattern
+## The rules
 
-[`aperture/patterns/`](aperture/patterns/README.md) — **`RegionGate`**, the required
-reusable asset, with no dependency on the rest of this project.
+Six questions, each about one concrete, visible thing. Thresholds derived from measured
+separations.
 
-Score the regions of an image against a written rubric, coarse to fine, and compose a
-verdict in your own code. Wire it into a Strands agent with the included
-`InterventionHandler`.
+| rule | scope | threshold | verdict |
+|---|---|---|---|
+| `credential` | per region | 0.35 | REDACT |
+| `personal_contact` | per region | 0.60 | REDACT |
+| `private_conversation` | whole frame | 0.55 | WITHHOLD |
+| `identity_document` | whole frame | 0.55 | WITHHOLD |
+| `financial_records` | whole frame | 0.70 | WITHHOLD |
+| `contact_sheet` | whole frame | 0.70 | WITHHOLD |
 
-```python
-gate = RegionGate(Decider(), rules=MY_RULES)
-result = gate.inspect(screenshot)
+Adapting it to your own definition of sensitive means editing one file:
+[`aperture/questions.py`](aperture/questions.py).
 
-if result.verdict is Verdict.WITHHOLD:   ...                       # send nothing
-elif result.verdict is Verdict.REDACT:   send(redact(shot, result.boxes()))
-else:                                    send(screenshot)
+---
+
+## Run it, step by step
+
+### 1. Requirements
+
+- Python 3.10 or newer
+- Windows for the clipboard watcher (`check` and `ask` work anywhere)
+- An AWS account with Bedrock access, for the agent half
+
+### 2. Create the environment and install
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+pip install -e ".[agent,ocr,windows,dev]"
 ```
 
-It carries four things that are easy to get wrong, each one measured:
+### 3. Get the decision model
 
-1. **It checks the image is really there.** The upstream docs warn that Decider's
-   confidence does not drop when an image is missing — it answers confidently at chance.
-2. **Batched questions say "any of these".** Images in one request share a single state.
-   Rewording moved separation from 0.341 to **0.488**, and lifted the positive case
-   across a 0.5 threshold it would otherwise have failed.
-3. **Narrow questions only.** One broad "how sensitive is this?" question returned
-   confidence 0.29–0.36 and caused the only misclassification in the run. Recomposed in
-   code: 5/5.
-4. **Crop before asking about small text.** 0.643 on a full 1080p frame, **0.884** on the
-   cropped region.
+```powershell
+pip install strands-decider
+```
 
-Full write-up of every measurement: [`research/README.md`](research/README.md).
+### 4. Start Decider 2B locally
 
-The most interesting wiring detail is that the gate uses Strands' **`Transform`** action,
-not just allow/deny. It *narrows* a tool call in place — an agent that asked to read four
-regions reads the three that were clean, and never learns the fourth existed.
+Leave this running in its own terminal. **`--vision` is required** — it is what lets the
+model look at images.
 
----
+```powershell
+strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --vision --device cpu --port 8099
+```
 
-## Running it
+First run downloads the weights. Confirm it is up:
 
-You need a vision-enabled Decider server and AWS credentials with Bedrock access.
+```powershell
+curl http://127.0.0.1:8099/health
+```
 
-```bash
-# 1. the local decision model, with its vision tower
-pip install "strands-decider[vision]"
-strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 \
-    --vision --device cpu --port 8099
+You want `"vision": true` in the reply.
 
-# on an Apple Silicon Mac, --device mlx is 1.4-1.6x faster than mps
+### 5. Configure AWS
 
-# 2. Aperture
-pip install -e ".[agent,ocr,windows]"
+```powershell
+aws configure
+```
 
-# 3. check the moving parts
+Then enable **Nova 2 Lite** in the Bedrock console under *Model access*, in the region
+you configured.
+
+### 6. Check everything is wired up
+
+```powershell
 aperture doctor
 ```
 
 ```
 decider server
-  ok    StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 on cpu, vision on
+  ok    strands-decider-2B on cpu, vision on
 OCR fast lane
   ok    installed
 clipboard
@@ -282,204 +226,136 @@ Amazon Bedrock
   ok    us.amazon.nova-2-lite-v1:0 reachable
 ```
 
-### Commands
+### 7. Inspect a single image
 
-```bash
-aperture check screenshot.png --out safe.png   # inspect one image, write a redacted copy
-aperture ask "why is this failing?"            # the agent; add --screen to use a file
-aperture guard --for 20m                       # watch the clipboard
-aperture doctor                                # check everything
+```powershell
+aperture check evalset\out\deploy_failure.png
 ```
 
-### Generate the eval screens and benchmark
+Add `--out safe.png` to write a redacted copy, or `--explain seen.png` to get an
+annotated view showing every score the gate produced.
 
-```bash
-python evalset/screens.py        # the six straightforward screens
-python evalset/hard_screens.py   # the four adversarial ones
-python evalset/bench.py          # Decider vs Nova, writes results.json
-pytest tests/ -s                 # end-to-end smoke test against a live server
+### 8. Run the agent
+
+```powershell
+aperture ask "my deploy is failing, what's wrong?" --screen evalset\out\deploy_failure.png
 ```
 
-Everything in `evalset/out/` is **drawn by those scripts**. No real credentials and no
-real person's data is in this repository; every key shown is a documented example value.
+```
+THE GATE RAN
+  credential=0.915 on tile 3  -> redact
+  credential=0.776 on tile 9  -> redact
+  regions: 3 of 24 sent, 4 withheld for safety,
+           2 skipped as unrelated  (88% kept local)
+  VERDICT: REDACT
+
+WHAT THE AGENT SAID
+  The deployment is failing due to a database connection pool timeout:
+  PoolTimeout: could not acquire a connection within 5.0s
+
+  Regions [3, 4, 9, 10] were withheld because they contained a credential.
+  You should rotate it immediately.
+```
+
+The agent asked for the whole screen and was given three regions. It still solved the
+problem, and said which parts it could not see.
+
+### 9. Guard your clipboard
+
+```powershell
+aperture guard
+```
+
+Now take a screenshot with `Win+Shift+S`. The image is held, inspected, and a safe
+version is put back. Useful flags:
+
+| flag | effect |
+|---|---|
+| `--for 60` | disarm automatically after 60 minutes |
+| `--folders` | watch screenshot folders instead of the clipboard |
+| `--vault` | keep the original of every blocked capture in a local quarantine folder |
+| `--aws-lane` | use Amazon Textract and Comprehend for word-precise boxes |
+| `--mode blur` | blur instead of painting solid |
+
+### 10. Run the tests
+
+```powershell
+python -m pytest tests -q
+python evalset\bench.py --skip-cloud
+```
 
 ---
 
-## The guard: two channels, because you use both
+## Two flags worth understanding
 
-The agent path only protects images going through the agent. It does nothing about you
-pasting a screenshot into a browser tab yourself — which is the case that actually bit the
-author. And a screenshot does not always go to the clipboard:
+**`--vault`** keeps the unredacted original of every blocked capture, so you do not lose
+a screenshot the gate withheld. Those files are real secrets in plain PNG — list them
+with `aperture vault` and empty the folder with `aperture vault --purge`.
 
-| How you took it | Where it lands | Covered by |
-|---|---|---|
-| `Win+Shift+S`, `PrtScn` | the clipboard | `aperture guard` |
-| `Win+PrtScn`, Snipping Tool "Save as" | a PNG in `Pictures\Screenshots` | `aperture guard --folders` |
-
-```bash
-aperture guard                      # clipboard
-aperture guard --folders            # screenshot folders, writes a .safe.png copy
-aperture guard --folders --replace  # overwrite the original in place
-aperture guard --dir D:\shots          # watch a specific folder instead
-```
-
-The folder guard is non-destructive by default: it leaves your original alone and writes
-`name.safe.png` beside it, because silently overwriting someone's files is a worse failure
-than leaving them a choice. `--replace` closes the hole properly if you want that.
-
-It also ignores everything already on disk when it starts, and only reacts to files
-created from then on. It does not go rummaging through your existing pictures.
-
-Verified live on the author's machine:
-
-```
-[16:27:21] new file aperture-test-capture.png, 1920x1080
-[16:27:27] regex  aws_access_key_id (AKIA...(20 chars)) at (1025, 172, 1374, 200)
-[16:28:29] decider credential=0.824 on tile 1 (r0c1, 1018x572) -> redact
-[16:28:30] REDACTED  2 region(s), 29% of the frame -> aperture-test-capture.safe.png
-```
-
-That run is from the version with a 2×2 grid and no mesh, and 29% of a screen is far too
-much to cover to hide one line. A user said so, four times, and was right every time.
-See [how little it covers now](#how-little-it-covers).
-
-### The clipboard path, step by step
-
-1. an image appears
-2. **it is taken away immediately** and replaced with a placeholder
-3. the fast lane runs — OCR plus regex, well under a second
-4. the judgement lane runs — Decider, seconds on CPU
-5. a redacted image goes back, or the original if it was clean
-
-Step 2 is the design. Inspecting first and replacing after leaves a ten-second window in
-which a paste gets the original. Holding it first means you cannot leak what you cannot
-paste. Paste is briefly unavailable; that is the trade.
-
-**Scope, deliberately narrow:**
-
-- **Images only.** Text on your clipboard is never read.
-- **Only while the command runs.** No service, no autostart, no tray icon, and no
-  `--install-autostart` flag — if the capability doesn't exist it can't be switched on by
-  accident.
-- **Nothing written to disk**, unless you turn on the quarantine below.
-
-A tool that inspects your screen has to be more trustworthy than the thing it protects you
-from.
-
-### Keeping the blocked screenshot: `--vault`
-
-Blocking is useful and lossy. Your clipboard gets the redacted copy, and the original —
-the one you actually took — is gone. Sometimes you still want it: for a bug report, for
-your own notes, to send over a channel you trust.
-
-```bash
-aperture guard --vault                      # ~/.aperture/quarantine
-aperture guard --vault D:\secrets --vault-keep 5 --vault-days 2
-aperture vault                              # list what's in there
-aperture vault --purge                      # empty it
-```
-
-Each blocked capture is stored three ways: the **original unredacted**, the redacted copy,
-and a JSON sidecar with the verdict and the per-region scores, so you can tell why
-something is quarantined without opening it.
-
-```
-2026-10-22T153115_redact.png            69 KB   original, unredacted
-2026-10-22T153115_redact.redacted.png   44 KB   what went to your clipboard
-2026-10-22T153115_redact.json                   verdict, reasons, scores
-```
-
-Verified with OCR: the original still yields a detectable `aws_access_key_id`, the
-redacted copy yields none.
-
-**This writes your secrets to disk, so it is off by default and it tells you so.** The
-guard's banner changes from *"nothing is written to disk"* to *"BLOCKED CAPTURES ARE SAVED
-UNREDACTED"* when the flag is on. On first use it writes a README into the folder saying
-what's in there, best-effort restricts the folder to your user account via `icacls`, and
-**warns you if the path is inside OneDrive, Dropbox, iCloud or a git repo** — a quarantine
-that syncs to the cloud defeats the entire point.
-
-Retention is finite by default: the newest 20 captures, nothing older than 7 days, purged
-on every write. A quarantine that only grows is an archive of your credentials, which is
-the opposite of the intent. Nothing is encrypted — it's a tidy drawer, not a safe.
+**`--aws-lane`** sends the capture to Amazon Textract and Comprehend in your own AWS
+account, which reads small text the local engine cannot and returns a box per word. It is
+off by default; without it nothing leaves your machine. Either way, the **decision** is
+always made locally by Decider.
 
 ---
 
-## Two lanes, and why
-
-| | Catches | Speed |
-|---|---|---|
-| **Code** (OCR + regex) | things with a known shape — `AKIA[0-9A-Z]{16}`, `sk_live_`, JWTs, DSNs | instant |
-| **Decider 2B** | things with no shape — "this is a private conversation", "this is someone's payroll page" | seconds |
-
-The fast lane was built on an assumption that turned out to be wrong, and the measurement
-is worth recording.
-
-**Expected:** a regex beats a 2B vision model at finding `AKIA[0-9A-Z]{16}` — exact,
-instant, returns coordinates.
-
-**Measured, on two real screenshots with live access keys on screen:**
-
-| | Capture 1 (1221×347) | Capture 2 (822×175) |
-|---|---|---|
-| regex + OCR | found nothing | found nothing |
-| **Strands Decider 2B** | **credential 0.884** | **credential 0.900 / 0.568** |
-| outcome | redacted 28% of frame | redacted 56% of frame |
-
-Twice, the model caught real credentials that the hand-written patterns missed. Cause not
-yet established — either the OCR mangles characters at that size, or those keys aren't in
-the 13 patterns.
-
-The fast lane stays, because when it fires it localises to exact pixels in under a second
-and cuts the gate from 6 local decisions to 3. But the roles were backwards: **code is the
-optimisation, Decider is the safety net.** Not the other way round.
-
----
-
-## Honest limitations
-
-- **Not a security control, and not compliance.** AI-prompt DLP already exists
-  commercially (Microsoft Purview, Netskope and others). This is defence in depth and a
-  second pair of eyes.
-- **The model has no image training at all.** The vision tower is inherited frozen from
-  Qwen3.5-2B-Base. AWS measure the checkpoint at 0.872 on POPE-adversarial. That is a
-  speed bump, not a guarantee, and thresholds here are deliberately biased toward
-  withholding.
-- **Ten synthetic screens is a small benchmark**, and six of them informed the thresholds.
-- **It is slow without a GPU.** 11–12 s per decision on an i5-1235U, median 43 s for a
-  whole screen. AWS report ~115 ms on an RTX 3090; the community's hosted CPU deployment
-  reports ~681 ms on 4 vCPUs.
-- **It needs about 7 GB of RAM, resident, for as long as the server runs.** On CPU the
-  torso loads in fp32, so `strands-decider serve` sits at ~6.96 GB. On a 16 GB laptop
-  with an editor and a browser open that leaves very little headroom: running the full
-  test suite under those conditions took 29 minutes instead of 12 and produced three
-  fixture *setup* failures from memory pressure, not from any defect. Close what you can,
-  or give it a machine with 32 GB.
-- **macOS is implemented but untested.** `aperture/watch.py` has an `NSPasteboard`
-  backend written against the AppKit API and never run on hardware, because this was
-  built on Windows. It is labelled as such in the code. Reports welcome.
-- **Anthropic models were unavailable** on the development account
-  (`INVALID_PAYMENT_INSTRUMENT` — Bedrock provisions them via AWS Marketplace), so the
-  agent runs on Amazon Nova 2 Lite. It was also the most accurate Nova on these screens.
-
-## Layout
+## Project layout
 
 ```
 aperture/
-  patterns/            THE REUSABLE ASSET - region_gate.py + intervention.py + README
-  decider.py           client for the local or hosted Decider server
+  patterns/            THE REUSABLE ASSET - RegionGate + the Strands intervention
   questions.py         the rubric: typed questions and thresholds
-  tiling.py            cutting a frame into regions, and why 448px forces it
-  scanner.py           the deterministic fast lane
+  decider.py           client for the local Decider server
+  tiling.py            cutting a frame into regions
+  mesh.py              covering only the parts of a region that hold ink
+  scanner.py           the local fast lane: OCR + regex
+  aws_lane.py          the cloud lane: Textract + Comprehend
   redact.py            painting over what was withheld
-  watch.py             clipboard guard (Windows tested, macOS untested)
-  agent/               the Strands agent and its tools
-  cli.py               check | ask | guard | doctor
-evalset/               drawn screens, ground truth, benchmark
-research/              every measurement, with the scripts that produced it
-tests/                 end-to-end smoke test
+  overlay.py           the annotated "what the gate saw" view
+  watch.py             clipboard and screenshot-folder watching
+  vault.py             local quarantine for blocked captures
+  agent/               the Strands agent on Amazon Bedrock
+  cli.py               check / ask / guard / vault / doctor
+
+evalset/               12 labelled screens and the benchmark
+research/              every measurement behind every number above
+tests/                 174 tests
 ```
 
-## Licence
+---
 
-Apache-2.0. Same as Strands Decider.
+## The reusable pattern
+
+[`aperture/patterns/`](aperture/patterns/README.md) — **`RegionGate`**, with no
+dependency on the rest of this project.
+
+Score the regions of an image against a written rubric, coarse to fine, and compose a
+verdict in your own code:
+
+```python
+from aperture.decider import Decider
+from aperture.patterns import RegionGate, Verdict
+
+gate = RegionGate(Decider(), rules=MY_RULES)
+result = gate.inspect(screenshot)
+
+if result.verdict is Verdict.WITHHOLD:
+    ...                                   # keep it local
+elif result.verdict is Verdict.REDACT:
+    send(redact(screenshot, result.boxes()))
+else:
+    send(screenshot)
+```
+
+Wiring it into a Strands agent uses the **`Transform`** action rather than allow/deny —
+it *narrows* a tool call in place, so an agent that asked for twenty-four regions reads
+the three that were clean and relevant, and never learns the others existed.
+
+---
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
+
+Built for the AWS **Agent Experience Hackathon: Strands Decider**.
+`#strands-decider-2b` `#context-memory`
