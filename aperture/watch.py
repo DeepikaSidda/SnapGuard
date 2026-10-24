@@ -29,6 +29,7 @@ Scope, deliberately narrow:
 
 from __future__ import annotations
 
+import hashlib
 import sys
 import time
 from dataclasses import dataclass, field
@@ -198,13 +199,19 @@ class Tally:
 
 
 def _fingerprint(image: Image.Image) -> tuple:
-    """Cheap identity for an image, to avoid re-inspecting what we just wrote back.
+    """Exact identity for an image, to recognise what we wrote back.
 
-    Size plus a coarse thumbnail of the pixels: enough to tell one screenshot from
-    another without hashing megabytes on every poll.
+    This was a 16x16 grayscale thumbnail, on the reasoning that it is cheap and good
+    enough to tell one screenshot from another. It is not. Two captures of the same page
+    a few pixels apart reduce to the same 16x16 thumbnail, so the guard treated a
+    genuinely new screenshot as one it had already inspected -- and because the skip was
+    silent, the tool simply stopped responding. A user reported exactly that.
+
+    Hashing the real pixels costs about 5ms on a 1762x692 frame, against a poll interval
+    measured in seconds, so the saving was never worth having.
     """
-    small = image.convert("L").resize((16, 16), Image.BILINEAR)
-    return (image.size, small.tobytes())
+    digest = hashlib.blake2b(image.convert("RGB").tobytes(), digest_size=16).digest()
+    return (image.size, digest)
 
 
 Box = tuple[int, int, int, int]
@@ -318,6 +325,7 @@ def guard_clipboard(
     deadline = time.time() + minutes * 60 if minutes else None
     tally = Tally()
     ignore: set[tuple] = set()
+    last_seen: tuple | None = None
 
     print("=" * 72)
     print("  APERTURE ARMED")
@@ -350,10 +358,23 @@ def guard_clipboard(
             image = clipboard.get_image()
             if image is None:
                 continue
+            # Two different reasons to skip an image, which used to be one set and a
+            # silent `continue`. They need separating, because conflating them meant
+            # every image ever seen was skipped forever -- so taking the same screenshot
+            # twice looked like the tool had died.
+            #
+            #   `ignore`     things WE put on the clipboard: the hold placeholder and
+            #                the redacted result. Must never be re-inspected, for the
+            #                life of the run.
+            #   `last_seen`  the previous poll. The clipboard does not change between
+            #                polls, so without this every frame is inspected repeatedly.
+            #                Only the LAST one, so re-copying something is honoured.
             key = _fingerprint(image)
             if key in ignore:
                 continue
-            ignore.add(key)
+            if key == last_seen:
+                continue
+            last_seen = key
 
             tally.seen += 1
 

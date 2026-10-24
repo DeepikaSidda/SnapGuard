@@ -114,3 +114,42 @@ def test_fingerprint_distinguishes_images_and_survives_a_roundtrip(clipboard):
         "a clipboard round-trip changed the fingerprint; the guard would re-inspect "
         "its own output in a loop"
     )
+
+
+# ---- recognising an image we have already inspected -------------------------
+
+
+def test_the_fingerprint_separates_near_identical_captures():
+    """The bug behind "I took another screenshot and it is not responding".
+
+    The fingerprint was a 16x16 grayscale thumbnail. Two captures of the same page a few
+    pixels apart reduce to the same thumbnail, so a genuinely new screenshot was treated
+    as one already inspected -- and the skip was silent, so the tool looked dead.
+    """
+    from aperture.watch import _fingerprint
+
+    a = Image.new("RGB", (400, 300), (30, 30, 36))
+    b = a.copy()
+    # One line of text, two pixels to the right. A person cannot see the difference; a
+    # tool deciding whether it has already inspected this image must.
+    ImageDraw.Draw(a).text((20, 100), "AKIAEXAMPLEKEYID1234", fill=(220, 220, 230))
+    ImageDraw.Draw(b).text((22, 100), "AKIAEXAMPLEKEYID1234", fill=(220, 220, 230))
+
+    assert _fingerprint(a) != _fingerprint(b)
+
+
+def test_the_fingerprint_is_stable_for_the_same_pixels():
+    """It still has to recognise our own output coming back unchanged."""
+    from aperture.watch import _fingerprint
+
+    img = Image.new("RGB", (200, 150), (10, 20, 30))
+    ImageDraw.Draw(img).rectangle([10, 10, 90, 90], fill=(200, 100, 50))
+    assert _fingerprint(img) == _fingerprint(img.copy())
+
+
+def test_size_alone_changes_the_fingerprint():
+    from aperture.watch import _fingerprint
+
+    assert _fingerprint(Image.new("RGB", (100, 100), "black")) != _fingerprint(
+        Image.new("RGB", (100, 101), "black")
+    )
