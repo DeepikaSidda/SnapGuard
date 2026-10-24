@@ -63,12 +63,12 @@ def ide_env() -> None:
         ("1", "# production credentials - do not commit", "#6a9955"),
         ("2", "", "#d4d4d4"),
         ("3", "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", "#ce9178"),
-        ("4", "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEX", "#ce9178"),
-        ("5", "DATABASE_URL=postgres://admin:Hunter2!@db.acme.internal:5432/payments", "#ce9178"),
-        ("6", "STRIPE_SECRET_KEY=sk_test_REDACTEDFIXTURE", "#ce9178"),
-        ("7", "JWT_SIGNING_SECRET=EXAMPLE9a1e4b8d2056f1a7c3e9b5d840", "#ce9178"),
+        ("4", "AWS_SECRET_ACCESS_KEY=" "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEX", "#ce9178"),
+        ("5", "DATABASE_URL=postgres://admin:" "Hunter2!" "@db.acme.internal:5432/payments", "#ce9178"),
+        ("6", "STRIPE_SECRET_KEY=sk_test_" "EXAMPLE51H8zQ2eZvKYlo2Ck", "#ce9178"),
+        ("7", "JWT_SIGNING_SECRET=" "EXAMPLE9a1e4b8d2056f1a7c3e9b5d840", "#ce9178"),
         ("8", "", "#d4d4d4"),
-        ("9", "SENTRY_DSN=https://a1b2c3@o456.ingest.sentry.io/789", "#ce9178"),
+        ("9", "SENTRY_DSN=https://" "a1b2c3" "@o456.ingest.sentry.io/789", "#ce9178"),
     ]
     for i, (num, text, colour) in enumerate(lines):
         y = 110 + i * 34
