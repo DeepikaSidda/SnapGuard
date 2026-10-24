@@ -93,6 +93,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     # The fast lane first. Exact, instant, and it gives the gate somewhere to look.
     hints: list[tuple[int, int, int, int]] = []
     reveal_boxes = None
+    text_boxes = None
     if args.aws_lane:
         # Recognition in the cloud, decision still local. This SENDS THE SCREENSHOT,
         # credentials and all, which is the opposite of the default. See aws_lane.py.
@@ -111,6 +112,7 @@ def cmd_check(args: argparse.Namespace) -> int:
                   f"(conf {secret.confidence:.2f}) at {secret.box}")
         hints = [s.box for s in reading.secrets]
         reveal_boxes = words_to_keep(reading)
+        text_boxes = [w.box for w in reading.words]
     elif args.ocr and ocr_available():
         secrets = scan(image)
         print(f"  fast lane (OCR+regex): {len(secrets)} structured secret(s)")
@@ -134,6 +136,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             meshed, shrunk = tighten_all(
                 image, boxes, enabled=args.mesh,
                 reveal_labels=args.reveal_labels, reveal_boxes=reveal_boxes,
+                text_boxes=text_boxes,
             )
         redaction = redact(image, meshed, mode=args.mode)
         redaction.image.save(args.out)

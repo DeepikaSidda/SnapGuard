@@ -216,7 +216,7 @@ def _fast_lane(
     ocr_on: bool,
     stamped,  # noqa: ANN001
     tally,  # noqa: ANN001
-) -> tuple[list[Box], list[Box] | None]:
+) -> tuple[list[Box], list[Box] | None, list[Box] | None]:
     """Locate secrets precisely, and report which words may stay visible.
 
     Two implementations of the same job, and the choice has consequences beyond
@@ -241,6 +241,7 @@ def _fast_lane(
     """
     hints: list[Box] = []
     reveal_words: list[Box] | None = None
+    text_words: list[Box] | None = None
 
     if aws_lane:
         from .aws_lane import AwsLaneUnavailable
@@ -264,7 +265,8 @@ def _fast_lane(
             stamped(f"aws lane: {len(reading.secrets)} located, "
                     f"{len(reading.words)} words at {reading.upscale}x, "
                     f"{reading.total_ms:.0f} ms, ${reading.cost_usd:.4f}")
-            return hints, reveal_words
+            text_words = [w.box for w in reading.words]
+            return hints, reveal_words, text_words
 
     if ocr_on:
         started = time.perf_counter()
@@ -278,7 +280,7 @@ def _fast_lane(
             hints = [s.box for s in secrets]
         stamped(f"fast lane done in {elapsed:.0f} ms")
 
-    return hints, reveal_words
+    return hints, reveal_words, text_words
 
 
 def guard_clipboard(
@@ -376,7 +378,9 @@ def guard_clipboard(
                 stamped(f"WARNING could not hold the clipboard: {exc}")
 
             # 3. Fast lane: exact, gives coordinates.
-            hints, reveal_words = _fast_lane(image, aws_lane, ocr_on, stamped, tally)
+            hints, reveal_words, text_words = _fast_lane(
+                image, aws_lane, ocr_on, stamped, tally
+            )
 
             # 4. Judgement lane.
             result = gate.inspect(image, hint_boxes=hints)
@@ -439,7 +443,8 @@ def guard_clipboard(
                 # is what separates it from the regex-narrowing that was reverted.
                 meshed, shrunk = tighten_all(image, boxes, enabled=mesh,
                                            reveal_labels=reveal_labels,
-                                           reveal_boxes=reveal_words)
+                                           reveal_boxes=reveal_words,
+                                           text_boxes=text_words)
                 if shrunk < 1.0:
                     stamped(f"mesh      kept {shrunk:.0%} of the flagged area, "
                             f"{len(boxes)} region(s) -> {len(meshed)} boxes")
@@ -665,7 +670,7 @@ def guard_folders(
                     tally.seen += 1
                     stamped(f"new file {path.name}, {image.width}x{image.height}")
 
-                    hints, reveal_words = _fast_lane(
+                    hints, reveal_words, text_words = _fast_lane(
                         image, aws_lane, ocr_on, stamped, tally
                     )
 
@@ -683,6 +688,7 @@ def guard_folders(
                         boxes, shrunk = tighten_all(
                             image, boxes, enabled=mesh,
                             reveal_labels=reveal_labels, reveal_boxes=reveal_words,
+                            text_boxes=text_words,
                         )
                         if shrunk < 1.0:
                             stamped(f"mesh      kept {shrunk:.0%} of the flagged area")

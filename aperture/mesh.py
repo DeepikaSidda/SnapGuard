@@ -135,6 +135,7 @@ def ink_mask(
     *,
     cell: int = DEFAULT_CELL,
     reveal: Sequence[Box] = (),
+    text_only: Sequence[Box] | None = None,
 ) -> tuple[np.ndarray, int, int]:
     """Which `cell`-sized squares of `box` contain anything other than background.
 
@@ -194,7 +195,56 @@ def ink_mask(
         values.max(axis=2) - values.min(axis=2) >= PTP_FLOOR
     )
 
+    if text_only is not None:
+        # Restrict to cells that an OCR with word-level boxes says hold text.
+        #
+        # This replaces a losing battle. Everything the gradient test calls "ink" that is
+        # not writing -- panel borders, input underlines, card shadows, icons -- was
+        # being covered, and three rounds of threshold tuning against one screenshot did
+        # not fix it. Measured on the capture a user reported, a border scores
+        # elongation 3.2-3.8 and flatness 6.6-7.4 where a line of credentials scores 21.7
+        # and 24.8: separable, but only once you have seen that screenshot, which is
+        # exactly the kind of number that stops generalising.
+        #
+        # When Textract has read the frame there is no need to infer any of it. It
+        # returns a box per word, so "where is the text" is known rather than estimated,
+        # and anything inked outside those boxes is furniture.
+        #
+        # THE RISK, PLAINLY: a credential Textract failed to read is in no word box, so
+        # it would not be covered by the mesh. That is a real transfer of trust to the
+        # recogniser, and it is only acceptable because this is measured -- Textract
+        # found 4 of 4 credentials on the demo fixture and 1 of 1 on the reported
+        # capture at confidence 1.00, where the local OCR found 1 of 4 and 0 of 1. It is
+        # also why this is `None` unless a caller passes boxes, so the local path keeps
+        # covering every inked pixel and makes no such assumption.
+        inked &= _cells_touching(text_only, (left, top), rows, columns, cell)
+
     return _dilate(inked), rows, columns
+
+
+def _cells_touching(
+    boxes: Sequence[Box],
+    origin: tuple[int, int],
+    rows: int,
+    columns: int,
+    cell: int,
+) -> np.ndarray:
+    """Cells overlapping any of `boxes`, in the cropped frame's coordinates.
+
+    Overlap rather than containment, and padded outward by a cell: a word box hugs its
+    glyphs, and the point here is to keep everything a glyph touches.
+    """
+    hit = np.zeros((rows, columns), dtype=bool)
+    offset_x, offset_y = origin
+    for left, top, right, bottom in boxes:
+        first_c = max(0, (left - offset_x) // cell - 1)
+        last_c = min(columns - 1, (right - offset_x) // cell + 1)
+        first_r = max(0, (top - offset_y) // cell - 1)
+        last_r = min(rows - 1, (bottom - offset_y) // cell + 1)
+        if last_c < first_c or last_r < first_r:
+            continue
+        hit[first_r : last_r + 1, first_c : last_c + 1] = True
+    return hit
 
 
 def _pixel_mask(
@@ -256,6 +306,7 @@ def tighten(
     cell: int = DEFAULT_CELL,
     max_fraction: float = MAX_FRACTION,
     reveal: Sequence[Box] = (),
+    text_only: Sequence[Box] | None = None,
 ) -> list[Box]:
     """Replace one flagged region with the parts of it that are not blank.
 
@@ -267,7 +318,7 @@ def tighten(
         return [box]
 
     # Two masks: everything that is here, and that minus the lines allowed to stay.
-    raw, rows, columns = ink_mask(image, box, cell=cell)
+    raw, rows, columns = ink_mask(image, box, cell=cell, text_only=text_only)
     if raw.size == 0 or not raw.any():
         # Nothing visible at all. Not an invitation to reveal the region -- the mesh
         # simply has nothing to say, so defer to the region the model judged.
@@ -275,7 +326,8 @@ def tighten(
 
     mask = raw
     if len(reveal):
-        mask, _, _ = ink_mask(image, box, cell=cell, reveal=reveal)
+        mask, _, _ = ink_mask(image, box, cell=cell, reveal=reveal,
+                              text_only=text_only)
         if not mask.any():
             # Every inked pixel in this region belongs to a line OCR read confidently as
             # ordinary language. Nothing is covered here.
@@ -497,6 +549,7 @@ def extend_along_ink(
     cell: int = DEFAULT_CELL,
     gap: int = 3,
     reveal: Sequence[Box] = (),
+    text_only: Sequence[Box] | None = None,
 ) -> list[Box]:
     """Grow each bar sideways while the line of content it sits on keeps going.
 
@@ -523,7 +576,8 @@ def extend_along_ink(
         return []
 
     mask, rows, columns = ink_mask(
-        image, (0, 0, image.width, image.height), cell=cell, reveal=reveal
+        image, (0, 0, image.width, image.height), cell=cell, reveal=reveal,
+        text_only=text_only,
     )
     if mask.size == 0:
         return list(boxes)
@@ -573,6 +627,7 @@ def tighten_all(
     enabled: bool = True,
     reveal_labels: bool = True,
     reveal_boxes: Sequence[Box] | None = None,
+    text_boxes: Sequence[Box] | None = None,
 ) -> tuple[list[Box], float]:
     """Mesh every flagged region, and report how much of the original area survived.
 
@@ -611,7 +666,8 @@ def tighten_all(
 
     out: list[Box] = []
     for box in boxes:
-        out.extend(tighten(image, box, cell=cell, reveal=reveal))
+        out.extend(tighten(image, box, cell=cell, reveal=reveal,
+                           text_only=text_boxes))
 
     if not out:
         # Revealing a region is one thing; revealing the entire screen on the strength
@@ -619,7 +675,8 @@ def tighten_all(
         # are restored. Bounds the blast radius of every judgement made in this module.
         return list(boxes), 1.0
 
-    out = extend_along_ink(image, out, cell=cell, reveal=reveal)
+    out = extend_along_ink(image, out, cell=cell, reveal=reveal,
+                           text_only=text_boxes)
     out = join_adjacent(out, bridge=0 if reveal else cell)
 
     # Union area, not a sum of areas: the regions this started from overlap by 6%, so
