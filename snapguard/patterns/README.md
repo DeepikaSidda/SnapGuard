@@ -10,7 +10,7 @@ Two files, no dependency on the rest of this project:
 | `region_gate.py` | The decision. Scores the regions of an image against a written rubric and composes a verdict. |
 | `intervention.py` | The wiring. Puts that decision in a Strands agent's path as an `InterventionHandler`. |
 
-Copy them both, or `pip install aperture-gate` and import them.
+Copy them both, or `pip install snapguard` and import them.
 
 ---
 
@@ -31,8 +31,8 @@ deciding is whether something may leave the machine.
 ## Thirty-second version
 
 ```python
-from aperture.decider import Decider, noul
-from aperture.patterns import RegionGate, Rule, Verdict
+from snapguard.decider import Decider, noul
+from snapguard.patterns import RegionGate, Rule, Verdict
 
 RULES = [
     Rule(
@@ -262,7 +262,7 @@ seven existed. Better than allowing everything, and better than blocking everyth
 ```python
 from strands import Agent
 from strands.models import BedrockModel
-from aperture.patterns.intervention import ScreenBuffer, ScreenGate
+from snapguard.patterns.intervention import ScreenBuffer, ScreenGate
 
 # Coarse on purpose: these regions are the crops that get sent to the cloud model, so
 # they have to stay big enough for it to read. The guard's grid is 6x4; this is not.

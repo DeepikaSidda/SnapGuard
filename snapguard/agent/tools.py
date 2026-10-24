@@ -186,7 +186,7 @@ def make_read_screen_region(buffer: ScreenBuffer, *, model_id: str = READER_MODE
         note = ""
         if parts:
             note = (
-                f"\n\n[APERTURE: {len(allowed)} of {len(buffer.tiles)} regions were "
+                f"\n\n[SNAPGUARD: {len(allowed)} of {len(buffer.tiles)} regions were "
                 f"sent. " + " ".join(parts) + "]"
             )
         return (

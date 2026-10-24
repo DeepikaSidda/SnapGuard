@@ -18,7 +18,7 @@ What has to stay true: the key must still be unrecoverable. That is the only rea
 is not a free win -- a credential Textract failed to read would be in no word box and
 would not be covered.
 
-Sends the image to AWS. See the warning in `aperture/aws_lane.py`.
+Sends the image to AWS. See the warning in `snapguard/aws_lane.py`.
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.aws_lane import read, reveal_boxes  # noqa: E402
-from aperture.mesh import tighten_all  # noqa: E402
-from aperture.redact import redact, resolve_boxes  # noqa: E402
-from aperture.scanner import read_text_boxes, scan_text  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.aws_lane import read, reveal_boxes  # noqa: E402
+from snapguard.mesh import tighten_all  # noqa: E402
+from snapguard.redact import redact, resolve_boxes  # noqa: E402
+from snapguard.scanner import read_text_boxes, scan_text  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
-QUARANTINE = Path(r"C:\Users\sidda\Downloads\aperture-quarantine")
+QUARANTINE = Path(r"C:\Users\sidda\Downloads\snapguard-quarantine")
 OUT = Path(__file__).resolve().parents[1] / "evalset" / "out"
 
 # The regions the model flagged on the most recent real capture, from its guard log.

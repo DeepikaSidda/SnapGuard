@@ -22,8 +22,8 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1]))
 
-from aperture.redact import hold_placeholder, redact  # noqa: E402
-from aperture.watch import _fingerprint, get_clipboard  # noqa: E402
+from snapguard.redact import hold_placeholder, redact  # noqa: E402
+from snapguard.watch import _fingerprint, get_clipboard  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "win32", reason="the tested backend is the Windows one"
@@ -49,7 +49,7 @@ def _distinct_image(size=(320, 200)) -> Image.Image:
     d = ImageDraw.Draw(img)
     d.rectangle([10, 10, size[0] - 10, size[1] - 10], outline=(220, 64, 64), width=4)
     d.ellipse([40, 40, 140, 140], fill=(40, 200, 120))
-    d.text((60, 160), "APERTURE ROUNDTRIP", fill=(240, 240, 250))
+    d.text((60, 160), "SNAPGUARD ROUNDTRIP", fill=(240, 240, 250))
     return img
 
 
@@ -126,7 +126,7 @@ def test_the_fingerprint_separates_near_identical_captures():
     pixels apart reduce to the same thumbnail, so a genuinely new screenshot was treated
     as one already inspected -- and the skip was silent, so the tool looked dead.
     """
-    from aperture.watch import _fingerprint
+    from snapguard.watch import _fingerprint
 
     a = Image.new("RGB", (400, 300), (30, 30, 36))
     b = a.copy()
@@ -140,7 +140,7 @@ def test_the_fingerprint_separates_near_identical_captures():
 
 def test_the_fingerprint_is_stable_for_the_same_pixels():
     """It still has to recognise our own output coming back unchanged."""
-    from aperture.watch import _fingerprint
+    from snapguard.watch import _fingerprint
 
     img = Image.new("RGB", (200, 150), (10, 20, 30))
     ImageDraw.Draw(img).rectangle([10, 10, 90, 90], fill=(200, 100, 50))
@@ -148,7 +148,7 @@ def test_the_fingerprint_is_stable_for_the_same_pixels():
 
 
 def test_size_alone_changes_the_fingerprint():
-    from aperture.watch import _fingerprint
+    from snapguard.watch import _fingerprint
 
     assert _fingerprint(Image.new("RGB", (100, 100), "black")) != _fingerprint(
         Image.new("RGB", (100, 101), "black")

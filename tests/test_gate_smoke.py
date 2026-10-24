@@ -19,9 +19,9 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import Decider, DeciderUnavailable, looks_blank  # noqa: E402
-from aperture.patterns import Policy, RegionGate, Verdict  # noqa: E402
-from aperture.questions import (  # noqa: E402
+from snapguard.decider import Decider, DeciderUnavailable, looks_blank  # noqa: E402
+from snapguard.patterns import Policy, RegionGate, Verdict  # noqa: E402
+from snapguard.questions import (  # noqa: E402
     CONTEXT_RULES,
     REGION_RULES,
     SCREEN_KIND,

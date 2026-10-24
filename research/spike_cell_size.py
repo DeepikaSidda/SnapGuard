@@ -28,14 +28,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.mesh import tighten_all  # noqa: E402
-from aperture.redact import redact  # noqa: E402
-from aperture.scanner import read_text_boxes  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.mesh import tighten_all  # noqa: E402
+from snapguard.redact import redact  # noqa: E402
+from snapguard.scanner import read_text_boxes  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evalset" / "out"
-QUARANTINE = Path(r"C:\Users\sidda\Downloads\aperture-quarantine")
+QUARANTINE = Path(r"C:\Users\sidda\Downloads\snapguard-quarantine")
 
 CASES = (
     ("small light 1024x472", OUT / "_small_source.png", [6, 7, 8, 10], "dcd_live"),

@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.vault import Vault  # noqa: E402
+from snapguard.vault import Vault  # noqa: E402
 
 
 def _image(tag: str = "SECRET", size=(300, 120)) -> Image.Image:

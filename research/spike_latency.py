@@ -28,9 +28,9 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import Decider, noul  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.decider import Decider, noul  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
 SCREENS = Path(__file__).resolve().parents[1] / "evalset" / "out"
 

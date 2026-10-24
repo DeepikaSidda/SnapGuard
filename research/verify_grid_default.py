@@ -19,13 +19,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import Decider  # noqa: E402
-from aperture.mesh import tighten_all  # noqa: E402
-from aperture.patterns import Policy, RegionGate, Verdict  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
-from aperture.redact import redact  # noqa: E402
-from aperture.scanner import read_text_boxes, scan_text  # noqa: E402
-from aperture.tiling import DEFAULT_COLUMNS, DEFAULT_ROWS, tile_grid  # noqa: E402
+from snapguard.decider import Decider  # noqa: E402
+from snapguard.mesh import tighten_all  # noqa: E402
+from snapguard.patterns import Policy, RegionGate, Verdict  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
+from snapguard.redact import redact  # noqa: E402
+from snapguard.scanner import read_text_boxes, scan_text  # noqa: E402
+from snapguard.tiling import DEFAULT_COLUMNS, DEFAULT_ROWS, tile_grid  # noqa: E402
 from spike_grid import draw  # noqa: E402
 
 
@@ -61,7 +61,7 @@ def main() -> int:
     text = " ".join(t for t, _ in read_text_boxes(out.image))
     leak = scan_text(text) or ("AKIAWBDM" in text)
     tree_kept = "pyproject" in text or "LICENSE" in text
-    terminal_kept = "doctor" in text or "aperture" in text
+    terminal_kept = "doctor" in text or "snapguard" in text
 
     print(f"  verdict       : {result.verdict.name}")
     print(f"  regions fired : {len(result.flagged)} of {len(tiles)}")

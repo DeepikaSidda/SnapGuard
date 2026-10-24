@@ -1,7 +1,7 @@
-"""Aperture's rubric: the questions put to Decider, and the thresholds over them.
+"""SnapGuard's rubric: the questions put to Decider, and the thresholds over them.
 
 Kept apart from the gate so the gate stays generic and this file stays readable. If you
-are adapting Aperture to your own definition of sensitive, this is the only file you
+are adapting SnapGuard to your own definition of sensitive, this is the only file you
 need to touch.
 
 Three conventions, each one earned from measurement (../research/README.md):

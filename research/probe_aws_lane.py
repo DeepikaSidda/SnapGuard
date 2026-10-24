@@ -14,7 +14,7 @@ Three things under test, in order, because each one only matters if the last wor
 
 NOTE ON WHAT THIS SENDS. This uploads the screenshot -- including the credential in it --
 to Textract and Comprehend in your own AWS account. That is a deliberate trade and the
-opposite of what `aperture guard` does by default, which is why this lives in research/
+opposite of what `snapguard guard` does by default, which is why this lives in research/
 and is not wired into the tool. Run it on a capture you are willing to send.
 
     .\\.venv\\Scripts\\python.exe research/probe_aws_lane.py <image.png>
@@ -80,7 +80,7 @@ def main(path: Path, upscale: float) -> int:
         print(f"      {len(text):>3} chars  conf {block['Confidence']:.1f}  {shown!r}")
 
     # ---- 2. our own regexes, now on Textract's text -----------------------------
-    from aperture.scanner import scan_text
+    from snapguard.scanner import scan_text
 
     full_text = "\n".join(b["Text"] for b in lines)
     print(f"  our regexes on Textract's text: {scan_text(full_text) or 'nothing'}")

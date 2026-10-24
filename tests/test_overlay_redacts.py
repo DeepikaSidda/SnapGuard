@@ -26,12 +26,12 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import Decider, DeciderUnavailable  # noqa: E402
-from aperture.overlay import annotate  # noqa: E402
-from aperture.patterns import Policy, RegionGate, Verdict  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
-from aperture.scanner import ocr_available, read_text_boxes, scan_text  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.decider import Decider, DeciderUnavailable  # noqa: E402
+from snapguard.overlay import annotate  # noqa: E402
+from snapguard.patterns import Policy, RegionGate, Verdict  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
+from snapguard.scanner import ocr_available, read_text_boxes, scan_text  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
 SCREEN = Path(__file__).resolve().parents[1] / "evalset" / "out" / "deploy_failure.png"
 

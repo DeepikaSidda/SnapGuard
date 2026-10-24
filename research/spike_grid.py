@@ -29,12 +29,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import IMAGE_LONG_SIDE, Decider  # noqa: E402
-from aperture.patterns import Policy, RegionGate  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
-from aperture.redact import redact  # noqa: E402
-from aperture.scanner import read_text_boxes, scan_text  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.decider import IMAGE_LONG_SIDE, Decider  # noqa: E402
+from snapguard.patterns import Policy, RegionGate  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
+from snapguard.redact import redact  # noqa: E402
+from snapguard.scanner import read_text_boxes, scan_text  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
 W, H = 1024, 576
 OUT = Path(__file__).resolve().parents[1] / "evalset" / "out"
@@ -59,7 +59,7 @@ def draw() -> Image.Image:
     d.rectangle([0, 26, 46, H], fill="#191920")
     d.rectangle([46, 26, 210, H], fill="#1b1b22")
     for i, name in enumerate(
-        ["STRANDS DECIDER", "  .venv", "  aperture", "  evalset", "  research",
+        ["STRANDS DECIDER", "  .venv", "  snapguard", "  evalset", "  research",
          "  tests", "  ARTICLE.md", "  Deepu_accessKeys .csv", "  DEMO_SCRIPT.md",
          "  LICENSE", "  pyproject.toml", "  README.md"]
     ):
@@ -77,7 +77,7 @@ def draw() -> Image.Image:
     d.rectangle([210, 330, W, H], fill="#0f1014")
     d.text((222, 338), "TERMINAL", font=font(10), fill="#8a8a99")
     for i, line in enumerate([
-        "PS C:\\Users\\sidda\\Downloads\\Strands Decider> aperture doctor",
+        "PS C:\\Users\\sidda\\Downloads\\Strands Decider> snapguard doctor",
         "decider server", "  ok    strands-decider-2B on cpu, vision on",
         "OCR fast lane", "  ok    installed", "Amazon Bedrock",
         "  ok    us.amazon.nova-2-lite-v1:0 reachable",

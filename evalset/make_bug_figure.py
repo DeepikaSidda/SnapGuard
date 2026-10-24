@@ -22,11 +22,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import Decider  # noqa: E402
-from aperture.overlay import DIM, annotate  # noqa: E402
-from aperture.patterns import Policy, RegionGate  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.decider import Decider  # noqa: E402
+from snapguard.overlay import DIM, annotate  # noqa: E402
+from snapguard.patterns import Policy, RegionGate  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
 OUT = Path(__file__).parent / "out"
 SCREEN = OUT / "deploy_failure.png"

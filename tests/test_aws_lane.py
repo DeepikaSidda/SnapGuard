@@ -25,8 +25,8 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture import aws_lane  # noqa: E402
-from aperture.aws_lane import (  # noqa: E402
+from snapguard import aws_lane  # noqa: E402
+from snapguard.aws_lane import (  # noqa: E402
     MIN_TEXT_PX,
     _assemble,
     _boxes_for_span,

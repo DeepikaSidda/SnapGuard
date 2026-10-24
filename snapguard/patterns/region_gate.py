@@ -1,7 +1,7 @@
 """RegionGate: score the regions of an image against a written rubric, coarse to fine.
 
 THE REUSABLE PATTERN. Nothing in this module knows about screenshots, secrets, or
-Aperture. It takes an image, a set of narrow typed questions, and a policy, and returns a
+SnapGuard. It takes an image, a set of narrow typed questions, and a policy, and returns a
 per-region verdict. Drop it into any agent that is about to send an image somewhere.
 
 Three things it does that a naive implementation gets wrong, each one measured rather
@@ -56,7 +56,7 @@ class Verdict(str, Enum):
 class Rule:
     """One narrow question, and what a 'yes' means for the verdict.
 
-    `question` is a typed question dict from `aperture.decider` -- usually `noul()`.
+    `question` is a typed question dict from `snapguard.decider` -- usually `noul()`.
 
     `any_phrasing` is the same question reworded for a batch of images. If you leave it
     out the gate will only ever ask this rule one image at a time, which is correct but
@@ -287,7 +287,7 @@ class RegionGate:
         # minutes before this was turned off.
         #
         # Kept, because it is the right tool on a large display where even a 4x3 region
-        # is big, and exposed as `aperture --precise`. The lesson is the ordering: make
+        # is big, and exposed as `snapguard --precise`. The lesson is the ordering: make
         # the regions small first, and only then narrow the ones that fire.
         refine_flagged: bool = False,
         # How many times to quarter a flagged region. Each level cuts the covered area

@@ -1,4 +1,4 @@
-"""Aperture: decide locally how much of your screen may reach a cloud model.
+"""SnapGuard: decide locally how much of your screen may reach a cloud model.
 
 Strands Decider 2B scores the regions of a screenshot on your own machine. Only the
 regions that are both clean and relevant are sent to Amazon Bedrock, which does the

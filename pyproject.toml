@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aperture-gate"
+name = "snapguard"
 version = "0.1.0"
 description = "A local gate that decides how much of your screen may reach a cloud model. Strands Decider 2B scores screen regions on your own machine; only the clean, relevant ones reach Amazon Bedrock."
 readme = "README.md"
@@ -27,10 +27,10 @@ macos = ["pyobjc-framework-Cocoa>=10.0"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-aperture = "aperture.cli:main"
+snapguard = "snapguard.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["aperture*"]
+include = ["snapguard*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

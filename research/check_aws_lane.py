@@ -9,7 +9,7 @@ The comparison is against the local pipeline's own best result on the same captu
 the question is concrete -- how much of the screen does each approach cover to hide the
 same key.
 
-Sends the images to AWS. See the warning in `aperture/aws_lane.py`.
+Sends the images to AWS. See the warning in `snapguard/aws_lane.py`.
 """
 
 from __future__ import annotations
@@ -21,13 +21,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.aws_lane import AwsLaneUnavailable, estimate_text_height, read  # noqa: E402
-from aperture.redact import redact  # noqa: E402
-from aperture.scanner import read_text_boxes, scan, scan_text  # noqa: E402
+from snapguard.aws_lane import AwsLaneUnavailable, estimate_text_height, read  # noqa: E402
+from snapguard.redact import redact  # noqa: E402
+from snapguard.scanner import read_text_boxes, scan, scan_text  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evalset" / "out"
-QUARANTINE = Path(r"C:\Users\sidda\Downloads\aperture-quarantine")
+QUARANTINE = Path(r"C:\Users\sidda\Downloads\snapguard-quarantine")
 
 CASES = (
     ("light 1805x832", QUARANTINE / "2026-10-23T165053.218_withhold.png", "dcd_live",

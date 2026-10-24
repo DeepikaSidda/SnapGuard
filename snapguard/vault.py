@@ -8,7 +8,7 @@ it to a tool that was only supposed to stop you *pasting* it.
 So: the redacted copy goes to your clipboard, and the original goes here.
 
 **This writes secrets to disk, and that is a real change in posture.** Everything else in
-Aperture is deliberately ephemeral -- images live in memory, logs record verdicts and
+SnapGuard is deliberately ephemeral -- images live in memory, logs record verdicts and
 numbers but never pixels. The vault is the one exception, so:
 
 * It is **off by default**. You pass `--vault` to turn it on.
@@ -40,7 +40,7 @@ from PIL import Image
 def default_directory() -> Path:
     """Where blocked captures go unless told otherwise.
 
-    `APERTURE_VAULT` overrides it, so a path can be set once in the environment rather
+    `SNAPGUARD_VAULT` overrides it, so a path can be set once in the environment rather
     than typed on every invocation.
 
     The default deliberately sits under the home directory and not in Pictures,
@@ -49,10 +49,10 @@ def default_directory() -> Path:
     would upload every blocked secret, which is precisely the thing this tool exists to
     prevent. `_warn_if_synced` catches that case wherever the folder ends up.
     """
-    override = os.environ.get("APERTURE_VAULT")
+    override = os.environ.get("SNAPGUARD_VAULT")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".aperture" / "quarantine"
+    return Path.home() / ".snapguard" / "quarantine"
 
 
 # Kept as a module attribute because callers import it, but resolve through
@@ -65,7 +65,7 @@ DEFAULT_DIRECTORY = default_directory()
 DEFAULT_KEEP = 20
 DEFAULT_MAX_AGE_DAYS = 7
 
-README = """# Aperture quarantine
+README = """# SnapGuard quarantine
 
 **Everything in this folder is a screenshot that was blocked from leaving your machine,
 stored here in its ORIGINAL, UNREDACTED form.**
@@ -88,11 +88,11 @@ colleague over a channel you trust.
 - Treat it like a folder full of credentials, because that is what it is.
 - Do not sync it. Check that it is not inside OneDrive, Dropbox, iCloud or a git
   repository.
-- Empty it when you are done: `aperture vault --purge`
+- Empty it when you are done: `snapguard vault --purge`
 
 ## Retention
 
-Aperture keeps the newest {keep} captures and deletes anything older than
+SnapGuard keeps the newest {keep} captures and deletes anything older than
 {days} days, each time it writes a new one. It will not grow without bound, but it is
 your folder and it is your responsibility.
 

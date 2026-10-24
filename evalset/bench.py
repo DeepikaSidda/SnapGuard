@@ -34,10 +34,10 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import Decider  # noqa: E402
-from aperture.patterns import Policy, RegionGate, Verdict  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
-from aperture.scanner import ocr_available, scan  # noqa: E402
+from snapguard.decider import Decider  # noqa: E402
+from snapguard.patterns import Policy, RegionGate, Verdict  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES, SCREEN_KIND  # noqa: E402
+from snapguard.scanner import ocr_available, scan  # noqa: E402
 
 SCREENS = Path(__file__).parent / "out"
 RESULTS = Path(__file__).parent / "results.json"

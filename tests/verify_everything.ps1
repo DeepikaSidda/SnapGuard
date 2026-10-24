@@ -27,7 +27,7 @@ function Step($name, $command) {
 Set-Content $log "verification run started $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 Step "1. doctor: server, OCR, Bedrock reachability" `
-    "$python -m aperture.cli doctor"
+    "$python -m snapguard.cli doctor"
 
 Step "2. offline test suite (no model, no network)" `
     "$python -m pytest tests -q --ignore=tests/test_overlay_redacts.py --ignore=tests/test_gate_smoke.py"
@@ -42,7 +42,7 @@ Step "5. eval set, 12 screens (real model)" `
     "$python -u evalset/bench.py --skip-cloud"
 
 Step "6. agent end to end (local gate + Amazon Bedrock)" `
-    "$python -u -m aperture.cli ask 'my deploy is failing, what is wrong?' --screen evalset/out/deploy_failure.png"
+    "$python -u -m snapguard.cli ask 'my deploy is failing, what is wrong?' --screen evalset/out/deploy_failure.png"
 
 Add-Content $log "`nverification run finished $(Get-Date -Format 'HH:mm:ss')"
 Write-Host "`nDONE -- full log at $log"

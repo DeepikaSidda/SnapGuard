@@ -35,16 +35,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.decider import Decider  # noqa: E402
-from aperture.mesh import tighten_all  # noqa: E402
-from aperture.patterns import Policy, RegionGate, Verdict  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
-from aperture.redact import redact  # noqa: E402
-from aperture.scanner import read_text_boxes, scan_text  # noqa: E402
+from snapguard.decider import Decider  # noqa: E402
+from snapguard.mesh import tighten_all  # noqa: E402
+from snapguard.patterns import Policy, RegionGate, Verdict  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
+from snapguard.redact import redact  # noqa: E402
+from snapguard.scanner import read_text_boxes, scan_text  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evalset" / "out"
-QUARANTINE = Path(r"C:\Users\sidda\Downloads\aperture-quarantine")
+QUARANTINE = Path(r"C:\Users\sidda\Downloads\snapguard-quarantine")
 
 GRIDS = ((2, 2), (3, 2), (4, 3), (6, 4))
 

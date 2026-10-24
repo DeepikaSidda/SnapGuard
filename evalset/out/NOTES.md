@@ -59,8 +59,8 @@ Quote the held-out column: Decider 6/6, Nova 2 Lite 4/6, Nova Pro 3/6.
 `_explained.png` and `_explained_contacts.png` are produced by:
 
 ```bash
-aperture check evalset/out/deploy_failure.png --explain evalset/out/_explained.png
-aperture check evalset/out/contacts.png --explain evalset/out/_explained_contacts.png
+snapguard check evalset/out/deploy_failure.png --explain evalset/out/_explained.png
+snapguard check evalset/out/contacts.png --explain evalset/out/_explained_contacts.png
 ```
 
 They show the region grid with every score the gate actually got, cleared regions

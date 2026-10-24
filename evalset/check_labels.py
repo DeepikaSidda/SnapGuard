@@ -16,7 +16,7 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
-from aperture.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
 from regions import SCREENS, frame_holds, region_holds  # noqa: E402
 
 FRAME_RULES = [r.name for r in CONTEXT_RULES]
@@ -34,7 +34,7 @@ for name in SCREENS:
         print(f"{name:<17}  MISSING IMAGE")
         continue
 
-    from aperture.tiling import tile_grid
+    from snapguard.tiling import tile_grid
 
     tiles = tile_grid(Image.open(path), columns=2, rows=2)
     cred = [t.index for t in tiles if region_holds(name, "credential", t.box)]

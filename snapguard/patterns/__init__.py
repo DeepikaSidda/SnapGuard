@@ -2,7 +2,7 @@
 
 `region_gate` is the pattern this project contributes: score the regions of an image
 against a written rubric, coarse to fine, and compose a verdict in your own code. It
-knows nothing about Aperture and is meant to be copied out.
+knows nothing about SnapGuard and is meant to be copied out.
 
 `intervention` wires that gate into a Strands agent, so a decision sits in the agent's
 path rather than beside it.

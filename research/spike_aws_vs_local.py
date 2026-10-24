@@ -14,7 +14,7 @@ Four numbers per capture, and the interesting one is not the coverage:
     leak        OCR of the output, scanned for patterns. Must stay clean.
     kept        a control string that must remain readable.
 
-Sends the images to AWS. See the warning in `aperture/aws_lane.py`.
+Sends the images to AWS. See the warning in `snapguard/aws_lane.py`.
 """
 
 from __future__ import annotations
@@ -27,15 +27,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.aws_lane import AwsLaneUnavailable, read, reveal_boxes  # noqa: E402
-from aperture.mesh import tighten_all  # noqa: E402
-from aperture.redact import redact, resolve_boxes  # noqa: E402
-from aperture.scanner import read_text_boxes, scan, scan_text  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.aws_lane import AwsLaneUnavailable, read, reveal_boxes  # noqa: E402
+from snapguard.mesh import tighten_all  # noqa: E402
+from snapguard.redact import redact, resolve_boxes  # noqa: E402
+from snapguard.scanner import read_text_boxes, scan, scan_text  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evalset" / "out"
-QUARANTINE = Path(r"C:\Users\sidda\Downloads\aperture-quarantine")
+QUARANTINE = Path(r"C:\Users\sidda\Downloads\snapguard-quarantine")
 
 # The regions the 2B model flagged on each capture, from real runs. Held fixed so this
 # measures recognition and not the model's afternoon.

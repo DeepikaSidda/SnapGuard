@@ -2,7 +2,7 @@
 
 WHY THIS EXISTS, AND WHAT IT COST TO LEARN.
 
-Aperture had two lanes. A deterministic one -- OCR plus thirteen regexes -- and the 2B
+SnapGuard had two lanes. A deterministic one -- OCR plus thirteen regexes -- and the 2B
 model. On two real captures of the author's own AWS keys the deterministic lane matched
 *nothing* while the model caught both, and `ARTICLE.md` drew the obvious conclusion: that
 hand-written patterns lose to a model on real data.
@@ -78,7 +78,7 @@ MIN_TEXT_PX = 15
 # screenshot -- DATE_TIME fires on "1 Nov" and on every log timestamp -- and a redaction
 # that covers the clock is the over-covering complaint in a new costume.
 #
-# Mapped to Aperture's own rule names so the rest of the pipeline does not have to learn
+# Mapped to SnapGuard's own rule names so the rest of the pipeline does not have to learn
 # Comprehend's vocabulary.
 ENTITY_KINDS: dict[str, str] = {
     "AWS_ACCESS_KEY": "credential",
@@ -312,7 +312,7 @@ def _union(boxes: Sequence[Box]) -> Box | None:
 
 
 def _regex_hits(words: Sequence[Word], text: str) -> list[Secret]:
-    """Aperture's own thirteen patterns, against text Textract could actually read."""
+    """SnapGuard's own thirteen patterns, against text Textract could actually read."""
     out: list[Secret] = []
     for kind, pattern in PATTERNS:
         for match in pattern.finditer(text):

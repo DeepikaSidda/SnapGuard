@@ -64,7 +64,7 @@ class Notifier:
             return None
         try:
             return subprocess.Popen(
-                [sys.executable, "-m", "aperture.notify", json.dumps(payload)],
+                [sys.executable, "-m", "snapguard.notify", json.dumps(payload)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 # Detach on Windows so the panel is not tied to the console's lifetime.
@@ -127,7 +127,7 @@ def _show(payload: dict) -> int:
 
     kind = payload.get("kind", "info")
     accent = ACCENTS.get(kind, ACCENTS["info"])
-    title = payload.get("title", "Aperture")
+    title = payload.get("title", "SnapGuard")
     lines = payload.get("lines", [])
     seconds = float(payload.get("seconds", DEFAULT_SECONDS))
 
@@ -158,7 +158,7 @@ def _show(payload: dict) -> int:
     body.pack(side="left", fill="both", expand=True, padx=18, pady=14)
 
     tk.Label(
-        body, text="APERTURE", bg=BACKGROUND, fg=accent,
+        body, text="SNAPGUARD", bg=BACKGROUND, fg=accent,
         font=("Segoe UI", 8, "bold"), anchor="w",
     ).pack(fill="x")
     tk.Label(

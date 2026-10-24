@@ -24,10 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.mesh import tighten_all  # noqa: E402
-from aperture.redact import redact  # noqa: E402
-from aperture.scanner import read_text_boxes  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.mesh import tighten_all  # noqa: E402
+from snapguard.redact import redact  # noqa: E402
+from snapguard.scanner import read_text_boxes  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 
 SCREEN = Path(__file__).resolve().parents[1] / "evalset" / "out" / "contacts.png"
 

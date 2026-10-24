@@ -328,7 +328,7 @@ def guard_clipboard(
     last_seen: tuple | None = None
 
     print("=" * 72)
-    print("  APERTURE ARMED")
+    print("  SNAPGUARD ARMED")
     print("=" * 72)
     print(f"  clipboard : {clipboard.name}")
     print(f"  decider   : {info.get('checkpoint')} on {info.get('device')}")
@@ -641,7 +641,7 @@ def guard_folders(
         )
 
     print("=" * 72)
-    print("  APERTURE ARMED (folders)")
+    print("  SNAPGUARD ARMED (folders)")
     print("=" * 72)
     for directory in watched:
         print(f"  watching  : {directory}")

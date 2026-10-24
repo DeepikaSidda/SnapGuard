@@ -31,8 +31,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.mesh import DEFAULT_CELL, ink_mask, tighten, tighten_all  # noqa: E402
-from aperture.redact import redact  # noqa: E402
+from snapguard.mesh import DEFAULT_CELL, ink_mask, tighten, tighten_all  # noqa: E402
+from snapguard.redact import redact  # noqa: E402
 
 BACKGROUND = (30, 30, 36)
 
@@ -220,7 +220,7 @@ def test_the_property_holds_at_every_cell_size(cell: int):
 
 def test_joining_two_bars_can_only_cover_more():
     """`join_adjacent` is cosmetic, so the one thing it must never do is uncover."""
-    from aperture.mesh import join_adjacent
+    from snapguard.mesh import join_adjacent
 
     a = (100, 50, 300, 64)
     b = (290, 50, 480, 64)
@@ -235,7 +235,7 @@ def test_joining_two_bars_can_only_cover_more():
 
 
 def test_bars_on_different_lines_are_not_joined():
-    from aperture.mesh import join_adjacent
+    from snapguard.mesh import join_adjacent
 
     boxes = [(100, 50, 300, 64), (100, 200, 300, 214)]
     assert len(join_adjacent(boxes)) == 2
@@ -243,7 +243,7 @@ def test_bars_on_different_lines_are_not_joined():
 
 def test_bars_far_apart_on_the_same_line_are_not_joined():
     """Two separate words on one line should not become one bar across the gap."""
-    from aperture.mesh import join_adjacent
+    from snapguard.mesh import join_adjacent
 
     boxes = [(100, 50, 200, 64), (600, 50, 700, 64)]
     assert len(join_adjacent(boxes)) == 2
@@ -295,7 +295,7 @@ def _seam_screen():
 
 
 def test_extension_covers_the_rest_of_the_line():
-    from aperture.mesh import extend_along_ink, tighten
+    from snapguard.mesh import extend_along_ink, tighten
 
     image, flagged = _seam_screen()
     bars = tighten(image, flagged)
@@ -309,7 +309,7 @@ def test_extension_covers_the_rest_of_the_line():
 
 def test_extension_covers_every_inked_pixel_on_the_flagged_line():
     """The property, stated over the line rather than the region."""
-    from aperture.mesh import extend_along_ink, tighten
+    from snapguard.mesh import extend_along_ink, tighten
 
     image, flagged = _seam_screen()
     boxes = extend_along_ink(image, tighten(image, flagged))
@@ -328,7 +328,7 @@ def test_extension_covers_every_inked_pixel_on_the_flagged_line():
 
 def test_extension_stops_at_a_gutter():
     """It must not run away across the whole screen at the first gap."""
-    from aperture.mesh import extend_along_ink, tighten
+    from snapguard.mesh import extend_along_ink, tighten
 
     img = Image.new("RGB", (600, 120), BACKGROUND)
     d = ImageDraw.Draw(img)
@@ -343,7 +343,7 @@ def test_extension_stops_at_a_gutter():
 
 
 def test_extension_can_only_grow_a_box():
-    from aperture.mesh import extend_along_ink
+    from snapguard.mesh import extend_along_ink
 
     image, flagged = _seam_screen()
     original = [(320, 40, 400, 70)]
@@ -379,7 +379,7 @@ def test_a_sliver_holding_glyph_pixels_is_kept():
     touches -- that test was removed for keeping every border on screen -- but because a
     sliver containing glyph pixels is not flat, and only flat boxes are dropped.
     """
-    from aperture.mesh import _drop_rules
+    from snapguard.mesh import _drop_rules
 
     img = Image.new("RGB", (500, 300), BACKGROUND)
     # Glyphs, not a line: the left edge of a credential clipped by a region seam.
@@ -398,7 +398,7 @@ def test_a_border_is_dropped_even_when_it_touches_something():
     On a real capture, the card's left border and the input field's underline both
     survived purely because they abutted the bar over the key.
     """
-    from aperture.mesh import _drop_rules
+    from snapguard.mesh import _drop_rules
 
     img = Image.new("RGB", (500, 300), BACKGROUND)
     d = ImageDraw.Draw(img)
@@ -414,7 +414,7 @@ def test_a_border_is_dropped_even_when_it_touches_something():
 
 def test_a_lone_box_is_never_dropped():
     """With nothing else on screen, a thin tall box is all the evidence there is."""
-    from aperture.mesh import _drop_rules
+    from snapguard.mesh import _drop_rules
 
     img = Image.new("RGB", (400, 300), BACKGROUND)
     only = (10, 10, 16, 200)
@@ -423,7 +423,7 @@ def test_a_lone_box_is_never_dropped():
 
 def test_a_narrow_column_of_text_is_not_mistaken_for_a_border():
     """The case width alone could not separate: three characters wide and very tall."""
-    from aperture.mesh import _is_rule
+    from snapguard.mesh import _is_rule
 
     img = Image.new("RGB", (200, 300), BACKGROUND)
     d = ImageDraw.Draw(img)
@@ -436,7 +436,7 @@ def test_a_narrow_column_of_text_is_not_mistaken_for_a_border():
 
 
 def test_a_plain_vertical_line_is_recognised_as_a_border():
-    from aperture.mesh import _is_rule
+    from snapguard.mesh import _is_rule
 
     img = Image.new("RGB", (200, 300), BACKGROUND)
     ImageDraw.Draw(img).line([(20, 20), (20, 280)], fill=(90, 90, 100), width=1)
@@ -444,7 +444,7 @@ def test_a_plain_vertical_line_is_recognised_as_a_border():
 
 
 def test_a_horizontal_divider_is_recognised_too():
-    from aperture.mesh import _is_rule
+    from snapguard.mesh import _is_rule
 
     img = Image.new("RGB", (400, 200), BACKGROUND)
     ImageDraw.Draw(img).line([(20, 100), (380, 100)], fill=(90, 90, 100), width=1)

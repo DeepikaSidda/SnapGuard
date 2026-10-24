@@ -184,7 +184,7 @@ def hold_placeholder(size: tuple[int, int], message: str) -> Image.Image:
     img = Image.new("RGB", (width, height), (24, 24, 28))
     draw = ImageDraw.Draw(img)
     draw.rectangle([0, 0, width - 1, height - 1], outline=MARK_EDGE, width=4)
-    draw.text((28, height // 2 - 18), "APERTURE", fill=MARK_EDGE)
+    draw.text((28, height // 2 - 18), "SNAPGUARD", fill=MARK_EDGE)
     draw.text((28, height // 2 + 2), message, fill=(230, 230, 238))
     return img
 

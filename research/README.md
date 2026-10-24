@@ -127,7 +127,7 @@ From `docs/vision.md` upstream:
 
 With no image, or a blank one, the model does **not** become uncertain — it answers
 confidently at chance. Any gate that trusts those numbers is reading noise with a
-confident face on it. `aperture.decider.looks_blank()` exists for this, and the gate
+confident face on it. `snapguard.decider.looks_blank()` exists for this, and the gate
 calls it before it asks anything.
 
 ## 7. Which Bedrock models were actually usable
@@ -649,7 +649,7 @@ On a screen where fifteen fire, refinement alone is sixty extra requests.
 
 Weighed against what it buys at a fine grid — `4x4` 22% → `4x4+ref` 19% — that is three
 points of coverage for 2.3x the requests on a good case and far worse on a bad one. So
-refinement is **off by default** and exposed as `aperture check --precise`, for the case
+refinement is **off by default** and exposed as `snapguard check --precise`, for the case
 the grid genuinely cannot reach: a 4K display, where even a 6x4 region is 640px wide.
 
 The ordering is the whole lesson. Make the regions small, *then* narrow the ones that
@@ -1006,7 +1006,7 @@ machine — it is unacceptable, and that stays the default.
 Three captures, all synthetic or self-made, all English, all dark-or-light desktop UI.
 Nothing here establishes how either service behaves on a screenshot of a phone, a
 non-Latin script, or a photograph of a screen. And `ENTITY_KINDS` maps sixteen Comprehend
-types onto four Aperture rules by hand, which is a mapping nobody has checked against
+types onto four SnapGuard rules by hand, which is a mapping nobody has checked against
 real positives for anything except `AWS_SECRET_KEY` and `NAME`.
 
 ---

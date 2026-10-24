@@ -44,9 +44,9 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
-from aperture.decider import Decider  # noqa: E402
-from aperture.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
-from aperture.tiling import tile_grid  # noqa: E402
+from snapguard.decider import Decider  # noqa: E402
+from snapguard.questions import CONTEXT_RULES, REGION_RULES  # noqa: E402
+from snapguard.tiling import tile_grid  # noqa: E402
 from regions import SCREENS, frame_holds, region_holds  # noqa: E402
 
 OUT = HERE / "out"

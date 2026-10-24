@@ -5,7 +5,7 @@ regex beats a 2B vision model outright. `AKIA` followed by sixteen uppercase alp
 is a fixed, documented format. A pattern match over OCR'd text is faster, exact, returns
 coordinates, and never has a confidence of 0.6.
 
-So the two halves of Aperture are split along the line of what each is actually good at:
+So the two halves of SnapGuard are split along the line of what each is actually good at:
 
     code     things with a known shape - keys, tokens, card numbers, DSNs
     Decider  things with no shape      - "this is a private conversation",

@@ -68,5 +68,5 @@ id_rsa*
 
 # The quarantine folder, wherever someone points it.
 quarantine/
-aperture-quarantine/
-.aperture/
+snapguard-quarantine/
+.snapguard/

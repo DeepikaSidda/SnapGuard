@@ -31,8 +31,8 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aperture.decider import Answer, Reply, noul  # noqa: E402
-from aperture.patterns import Policy, RegionGate, Rule, Verdict  # noqa: E402
+from snapguard.decider import Answer, Reply, noul  # noqa: E402
+from snapguard.patterns import Policy, RegionGate, Rule, Verdict  # noqa: E402
 
 CREDENTIAL = Rule(
     name="credential",

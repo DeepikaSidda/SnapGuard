@@ -130,7 +130,7 @@ class ScreenGate(InterventionHandler):
         )
     """
 
-    name = "aperture-screen-gate"
+    name = "snapguard-screen-gate"
 
     def __init__(
         self,
@@ -145,7 +145,7 @@ class ScreenGate(InterventionHandler):
         if not STRANDS_AVAILABLE:  # pragma: no cover
             raise ImportError(
                 "ScreenGate needs strands-agents. Install with: pip install "
-                "'aperture-gate[agent]'"
+                "'snapguard[agent]'"
             )
         self.gate = gate
         self.buffer = buffer
@@ -225,7 +225,7 @@ class ScreenGate(InterventionHandler):
                 return (
                     Confirm(
                         prompt=(
-                            "Aperture could not judge this screen capture "
+                            "SnapGuard could not judge this screen capture "
                             f"({reasons}). Send it anyway?"
                         )
                     ),
@@ -250,7 +250,7 @@ class ScreenGate(InterventionHandler):
             return (
                 Deny(
                     reason=(
-                        f"Aperture withheld this screen capture: {reasons}. The whole "
+                        f"SnapGuard withheld this screen capture: {reasons}. The whole "
                         "frame is sensitive, so no region of it was sent. Ask the user "
                         "to describe the problem in words instead."
                     )
@@ -283,7 +283,7 @@ class ScreenGate(InterventionHandler):
                 Transform(
                     apply=narrow,
                     reason=(
-                        f"Aperture withheld regions {withheld} ({reasons}) and allowed "
+                        f"SnapGuard withheld regions {withheld} ({reasons}) and allowed "
                         f"{allowed}."
                     ),
                 ),

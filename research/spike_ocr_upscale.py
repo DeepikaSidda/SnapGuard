@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.scanner import (  # noqa: E402
+from snapguard.scanner import (  # noqa: E402
     looks_like_ordinary_language,
     read_text_runs,
     scan_text,
@@ -38,7 +38,7 @@ from aperture.scanner import (  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evalset" / "out"
-QUARANTINE = Path(r"C:\Users\sidda\Downloads\aperture-quarantine")
+QUARANTINE = Path(r"C:\Users\sidda\Downloads\snapguard-quarantine")
 
 CASES = (
     ("light 1805x832", QUARANTINE / "2026-10-23T165053.218_withhold.png", "dcd_live"),

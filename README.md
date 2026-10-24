@@ -1,4 +1,4 @@
-# Aperture
+# SnapGuard
 
 **Share a screenshot without sharing your secrets.**
 
@@ -7,7 +7,7 @@ Slack, attach it to a ticket, or paste it into a chat assistant. The error you w
 show is in the terminal on the left. The access key sitting in the editor on the right
 goes along for the ride.
 
-Aperture puts a decision in between. **Strands Decider 2B** runs on your own machine,
+SnapGuard puts a decision in between. **Strands Decider 2B** runs on your own machine,
 looks at your screen region by region, and decides what may leave. The key gets covered.
 Everything you actually meant to share stays readable.
 
@@ -17,16 +17,16 @@ Everything you actually meant to share stays readable.
 
 ## When you would use it
 
-**Sending an error to a colleague.** Run `aperture guard`, take your screenshot, and
+**Sending an error to a colleague.** Run `snapguard guard`, take your screenshot, and
 paste it anywhere — Slack, WhatsApp, Teams, email, a Jira ticket, a GitHub issue, a
 Stack Overflow question. Your clipboard already holds the safe version by the time you
 paste. It never has to know where the image is going.
 
-**Asking a cloud model about your screen.** `aperture ask` gives a Strands agent on
+**Asking a cloud model about your screen.** `snapguard ask` gives a Strands agent on
 Amazon Bedrock only the regions that are both safe *and* relevant to your question — on
 the demo screen, three regions of twenty-four.
 
-**Pair programming, demos, live streams.** Arm it for an hour with `aperture guard
+**Pair programming, demos, live streams.** Arm it for an hour with `snapguard guard
 --for 60` and every screenshot you take in that window is checked before it can be
 pasted.
 
@@ -175,7 +175,7 @@ separations.
 | `contact_sheet` | whole frame | 0.70 | WITHHOLD |
 
 Adapting it to your own definition of sensitive means editing one file:
-[`aperture/questions.py`](aperture/questions.py).
+[`snapguard/questions.py`](snapguard/questions.py).
 
 ---
 
@@ -231,7 +231,7 @@ you configured.
 ### 6. Check everything is wired up
 
 ```powershell
-aperture doctor
+snapguard doctor
 ```
 
 ```
@@ -248,7 +248,7 @@ Amazon Bedrock
 ### 7. Inspect a single image
 
 ```powershell
-aperture check evalset\out\deploy_failure.png
+snapguard check evalset\out\deploy_failure.png
 ```
 
 Add `--out safe.png` to write a redacted copy, or `--explain seen.png` to get an
@@ -257,7 +257,7 @@ annotated view showing every score the gate produced.
 ### 8. Run the agent
 
 ```powershell
-aperture ask "my deploy is failing, what's wrong?" --screen evalset\out\deploy_failure.png
+snapguard ask "my deploy is failing, what's wrong?" --screen evalset\out\deploy_failure.png
 ```
 
 ```
@@ -284,7 +284,7 @@ problem, and said which parts it could not see.
 This is the one to use when you are sending a screenshot to a person.
 
 ```powershell
-aperture guard
+snapguard guard
 ```
 
 Now take a screenshot with `Win+Shift+S` and paste it wherever you were going to —
@@ -322,7 +322,7 @@ python evalset\bench.py --skip-cloud
 
 **`--vault`** keeps the unredacted original of every blocked capture, so you do not lose
 a screenshot the gate withheld. Those files are real secrets in plain PNG — list them
-with `aperture vault` and empty the folder with `aperture vault --purge`.
+with `snapguard vault` and empty the folder with `snapguard vault --purge`.
 
 **`--aws-lane`** sends the capture to Amazon Textract and Comprehend in your own AWS
 account, which reads small text the local engine cannot and returns a box per word. It is
@@ -334,7 +334,7 @@ always made locally by Decider.
 ## Project layout
 
 ```
-aperture/
+snapguard/
   patterns/            THE REUSABLE ASSET - RegionGate + the Strands intervention
   questions.py         the rubric: typed questions and thresholds
   decider.py           client for the local Decider server
@@ -358,15 +358,15 @@ tests/                 174 tests
 
 ## The reusable pattern
 
-[`aperture/patterns/`](aperture/patterns/README.md) — **`RegionGate`**, with no
+[`snapguard/patterns/`](snapguard/patterns/README.md) — **`RegionGate`**, with no
 dependency on the rest of this project.
 
 Score the regions of an image against a written rubric, coarse to fine, and compose a
 verdict in your own code:
 
 ```python
-from aperture.decider import Decider
-from aperture.patterns import RegionGate, Verdict
+from snapguard.decider import Decider
+from snapguard.patterns import RegionGate, Verdict
 
 gate = RegionGate(Decider(), rules=MY_RULES)
 result = gate.inspect(screenshot)

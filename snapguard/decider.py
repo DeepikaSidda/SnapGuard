@@ -15,7 +15,7 @@ two caveats. **It is untested**: it is written against the documented request sh
 was never exercised against the live service, because the only key available during
 development had to be treated as compromised. And its free tier caps you at 4 questions
 and 1 image per request, which defeats the point of asking many questions about one
-image -- Aperture's own rubric exceeds both limits.
+image -- SnapGuard's own rubric exceeds both limits.
 
 Use the local server. The hosted switch is a convenience for reading, not a supported
 path.
@@ -252,11 +252,11 @@ class Decider:
         api_key: str | None = None,
         timeout: float = 600.0,
     ) -> None:
-        env_url = os.environ.get("APERTURE_DECIDER_URL") or os.environ.get(
+        env_url = os.environ.get("SNAPGUARD_DECIDER_URL") or os.environ.get(
             "STRANDS_DECIDER_URL"
         )
         self.url = (url or env_url or LOCAL_URL).rstrip("/")
-        self.api_key = api_key or os.environ.get("APERTURE_DECIDER_KEY")
+        self.api_key = api_key or os.environ.get("SNAPGUARD_DECIDER_KEY")
         # Hosted deployments use a different path and require auth.
         self.hosted = "/v1/decide" if self.api_key else None
         self.timeout = timeout

@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image  # noqa: E402
 
-from aperture.decider import Decider, noul  # noqa: E402
+from snapguard.decider import Decider, noul  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "evalset" / "out"
 

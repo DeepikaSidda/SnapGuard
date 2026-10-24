@@ -1,4 +1,4 @@
-"""A full sweep of everything Aperture claims to do, run against live services.
+"""A full sweep of everything SnapGuard claims to do, run against live services.
 
 Not a unit test. This exercises the real CLI surface, the real local model and the real
 Bedrock endpoint, and prints a pass/fail line per claim. It exists because "did you test
@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
-APERTURE = ROOT / ".venv" / "Scripts" / "aperture.exe"
+SNAPGUARD = ROOT / ".venv" / "Scripts" / "snapguard.exe"
 SCREENS = ROOT / "evalset" / "out"
 
 results: list[tuple[str, bool, str]] = []
@@ -33,7 +33,7 @@ def record(claim: str, ok: bool, detail: str = "") -> None:
 
 def run(args: list[str], timeout: int = 900) -> tuple[int, str]:
     proc = subprocess.run(
-        [str(APERTURE), *args], capture_output=True, text=True, timeout=timeout, cwd=ROOT
+        [str(SNAPGUARD), *args], capture_output=True, text=True, timeout=timeout, cwd=ROOT
     )
     return proc.returncode, proc.stdout + proc.stderr
 
@@ -41,7 +41,7 @@ def run(args: list[str], timeout: int = 900) -> tuple[int, str]:
 def main() -> int:
     started = time.time()
     print("=" * 74)
-    print("  APERTURE -- full verification sweep")
+    print("  SNAPGUARD -- full verification sweep")
     print("=" * 74)
 
     # ---- 1. the moving parts -------------------------------------------------
@@ -127,9 +127,9 @@ def main() -> int:
     print("\n6. The reusable pattern, imported on its own")
     probe = (
         "import sys; sys.path.insert(0, r'%s');"
-        "from aperture.patterns import RegionGate, Rule, Verdict, Policy;"
-        "from aperture.patterns.intervention import ScreenGate, ScreenBuffer;"
-        "from aperture.decider import Decider, noul, looks_blank;"
+        "from snapguard.patterns import RegionGate, Rule, Verdict, Policy;"
+        "from snapguard.patterns.intervention import ScreenGate, ScreenBuffer;"
+        "from snapguard.decider import Decider, noul, looks_blank;"
         "from PIL import Image;"
         "print('blank-guard', looks_blank(Image.new('RGB',(300,300),'white')));"
         "print('verdicts', [v.value for v in Verdict])" % ROOT
@@ -164,8 +164,8 @@ def main() -> int:
     print("    - macOS clipboard (NSPasteboard): no Apple hardware available")
     print("    - the hosted community endpoint: no usable API key")
     print("  Covered manually, not re-run here (they need a live screen or filesystem):")
-    print("    - aperture ask with live capture (mss)")
-    print("    - aperture guard (clipboard) and guard --folders [--replace]")
+    print("    - snapguard ask with live capture (mss)")
+    print("    - snapguard guard (clipboard) and guard --folders [--replace]")
     return 0 if not failures else 1
 
 

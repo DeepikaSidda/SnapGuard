@@ -1,13 +1,13 @@
-"""Aperture's command line.
+"""SnapGuard's command line.
 
 Four commands, and none of them run unless you run them. There is deliberately no
 installer, no service, no autostart flag: a tool that inspects your screen should exist
 only while you are looking at it.
 
-    aperture check  <image>        inspect one image and print the verdict
-    aperture ask    "<question>"   the agent: look at a screen, answer, gate the pixels
-    aperture guard                 watch the clipboard for screenshots
-    aperture doctor                check the decider server and Bedrock access
+    snapguard check  <image>        inspect one image and print the verdict
+    snapguard ask    "<question>"   the agent: look at a screen, answer, gate the pixels
+    snapguard guard                 watch the clipboard for screenshots
+    snapguard doctor                check the decider server and Bedrock access
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             print(f"    {secret.kind}: {secret.redacted_sample} at {secret.box}")
         hints = [s.box for s in secrets]
     elif args.ocr:
-        print("  fast lane: OCR not installed (pip install 'aperture-gate[ocr]')")
+        print("  fast lane: OCR not installed (pip install 'snapguard[ocr]')")
 
     result = _gate(decider, args.columns, args.rows, describe=args.describe, precise=args.precise).inspect(image, hint_boxes=hints)
     _print_result(result, image)
@@ -167,7 +167,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         from .agent import build
     except ImportError as exc:
         print(f"the agent needs extra packages: {exc}")
-        print("install with: pip install 'aperture-gate[agent]'")
+        print("install with: pip install 'snapguard[agent]'")
         return 1
 
     screen = Path(args.screen) if args.screen else None
@@ -280,7 +280,7 @@ def cmd_vault(args: argparse.Namespace) -> int:
     store = Vault(args.path or DEFAULT_DIRECTORY)
     if not store.directory.exists():
         print(f"no quarantine folder at {store.directory}")
-        print("turn it on with: aperture guard --vault")
+        print("turn it on with: snapguard guard --vault")
         return 0
 
     entries = store.entries()
@@ -303,7 +303,7 @@ def cmd_vault(args: argparse.Namespace) -> int:
             print(f"{entry.image_path.name:<34}"
                   f"{entry.size[0]}x{entry.size[1]:<7}"
                   f"{entry.verdict:>12}  {reason}")
-        print("\nThese are UNREDACTED originals. Empty with: aperture vault --purge")
+        print("\nThese are UNREDACTED originals. Empty with: snapguard vault --purge")
 
     if args.open_it:
         import subprocess
@@ -326,7 +326,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     print("\nOCR fast lane")
     print("  ok    installed" if ocr_available()
-          else "  warn  not installed; pip install 'aperture-gate[ocr]'")
+          else "  warn  not installed; pip install 'snapguard[ocr]'")
 
     print("\nclipboard")
     try:
@@ -359,7 +359,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="aperture",
+        prog="snapguard",
         description="Decide locally how much of your screen may reach a cloud model.",
     )
     parser.add_argument("--decider-url", default=None,
@@ -433,7 +433,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="keep the ORIGINAL of every blocked capture in a local "
                             "quarantine folder, so you do not lose the screenshot. "
                             "Writes unredacted secrets to disk. Default location is "
-                            "~/.aperture/quarantine")
+                            "~/.snapguard/quarantine")
     guard.add_argument("--vault-keep", type=int, default=20, metavar="N",
                        help="keep only the newest N captures (default 20)")
     guard.add_argument("--vault-days", type=int, default=7, metavar="D",
