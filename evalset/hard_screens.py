@@ -158,8 +158,17 @@ def token_in_url() -> None:
     img.save(HERE / "token_in_url.png")
 
 
-if __name__ == "__main__":
-    for fn in (sha_soup, public_metrics, dark_editor, token_in_url):
+def _draw_all() -> None:
+    """Every held-out screen, in one place.
+
+    This used to be two `__main__` blocks: four screens drawn by default and two more
+    behind an undocumented `--extra` flag, because `id_card` and `contacts` were added
+    later and bolted onto the end of the file. Running the script the obvious way
+    therefore produced four of six, which nobody noticed while the PNGs were committed
+    and nothing ever had to regenerate them. The moment images were removed from the
+    repository, the benchmark could not be reproduced -- it wants all six.
+    """
+    for fn in (sha_soup, public_metrics, dark_editor, token_in_url, id_card, contacts):
         fn()
         print(f"wrote {fn.__name__}.png")
 
@@ -263,11 +272,5 @@ def contacts() -> None:
     img.save(HERE / "contacts.png")
 
 
-def _extra() -> None:
-    for fn in (id_card, contacts):
-        fn()
-        print(f"wrote {fn.__name__}.png")
-
-
-if __name__ == "__main__" and "--extra" in __import__("sys").argv:
-    _extra()
+if __name__ == "__main__":
+    _draw_all()
