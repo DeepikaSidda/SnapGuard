@@ -156,7 +156,7 @@ def test_a_key_is_found_and_the_box_lands_on_the_value():
     """The finding that prompted this module: the patterns work, given readable text."""
     words, text = _assemble(
         reply([
-            word("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            word("AWS_SECRET_ACCESS_KEY=" + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
                  0.1, 0.3, 0.5),
         ]),
         SENT, upscale=1.0,

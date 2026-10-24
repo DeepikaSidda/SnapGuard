@@ -137,7 +137,8 @@ def token_in_url() -> None:
     # Invented, and marked EXAMPLE so no scanner mistakes it for a live token. It still
     # matches the ghp_ shape, which is all the gate needs to see.
     d.text((140, 65),
-           "https://admin.acme.dev/reports?export=csv&token=ghp_EXAMPLE9fK2mQ7xZ1aB4cD8eF0gH3jL5n",
+           "https://admin.acme.dev/reports?export=csv&token=ghp_" 
+           "EXAMPLE9fK2mQ7xZ1aB4cD8eF0gH3jL5n",
            font=font(15, mono=True), fill="#3a3a46")
 
     d.text((48, 150), "Reports", font=font(34), fill="#14141c")

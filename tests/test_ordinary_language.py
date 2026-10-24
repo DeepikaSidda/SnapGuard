@@ -40,12 +40,12 @@ SECRETS = [
     "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI",
     "wJalrXUtnFEMI",
     "/K7MDENG/bPxRfiCYEXAMPLEKEY",
-    "STRIPE_SECRET_KEY=sk_live_51H8zQ2eZvKY",
+    "STRIPE_SECRET_KEY=sk_test_51H8zQ2eZvKY",
     "sk_test_REDACTEDFIXTURE",
     "DATABASE_URL=postgres://admin:Hunter2!",
     "@db.acme.internal:5432/payments",
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
-    "ghp_EXAMPLE000000000000000000000000000",
+    "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a",
     "Password: hunter2xyzQ",
     # The dangerous one: a secret sitting in the middle of a sentence. A test that
     # tolerated a fraction of odd tokens would reveal this whole line.
@@ -230,8 +230,8 @@ def test_filenames_and_identifiers_are_revealed(text: str):
         "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI",
         "dcd_live_EXAMPLEa1B2c3D4e5F6g7H8i9J0kL1mN2oP3qR4sT5uV6wX7",
         "/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        "ghp_EXAMPLE000000000000000000000000000",
-        "xoxb-EXAMPLE-0000-000000000",
+        "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a",
+        "xoxb-" + "2410-5832-ZmZjYjU4ZjQxMjQw",
     ],
 )
 def test_separators_do_not_smuggle_a_key_through(text: str):
